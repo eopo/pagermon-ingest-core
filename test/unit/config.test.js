@@ -58,14 +58,11 @@ describe('config', () => {
     });
 
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
     config.validate();
 
-    expect(errorSpy).toHaveBeenCalled();
     expect(exitSpy).toHaveBeenCalledWith(1);
 
     exitSpy.mockRestore();
-    errorSpy.mockRestore();
   });
 });

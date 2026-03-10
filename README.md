@@ -114,6 +114,23 @@ Bootstrap mode lets adapter repos pass the adapter class directly and avoids pat
 Use loader mode when your container layout already provides `/app/adapter/adapter.js`.
 Use bootstrap mode when your adapter repo wants explicit startup control in code.
 
+## Logger Contract
+
+`ingest-core` passes a ready-to-use logger into adapter config as `config.logger`.
+
+- Use `config.logger` directly for adapter lifecycle logs.
+- Create scoped loggers in the adapter itself via `config.logger.child({...})`.
+- No extra logger helper is required in adapter config.
+
+For tests, use the central helper from core:
+
+```javascript
+import { createMockLogger } from '@pagermon/ingest-core/lib/runtime/logger.js';
+
+const logger = createMockLogger(vi); // spy-enabled methods
+// or: createMockLogger() for no-op methods
+```
+
 ## Development
 
 ```bash

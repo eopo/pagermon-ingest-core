@@ -579,7 +579,6 @@ Most important injected values:
 
 - `config.adapter` - your adapter settings (`INGEST_ADAPTER__*`)
 - `config.logger` - ready-to-use logger (default for most adapters)
-- `config.createChildLogger(bindings)` - optional helper to create scoped child loggers
 
 **Why this helps:**
 
@@ -598,11 +597,11 @@ constructor(config = {}) {
 }
 ```
 
-Use `createChildLogger` only when you want additional structure under the adapter namespace. For example, if you have sub-components, you could create child loggers per component:
+If you have sub-components, create child loggers directly from `config.logger`:
 
 ```javascript
-this.decoderLogger = config.createChildLogger({ component: 'decoder' });
-this.receiverLogger = config.createChildLogger({ component: 'receiver' });
+this.decoderLogger = config.logger.child({ component: 'decoder' });
+this.receiverLogger = config.logger.child({ component: 'receiver' });
 ```
 
 **Use levels consistently:**
@@ -656,16 +655,22 @@ Test adapter logic in isolation using mocks.
 ```javascript
 import { describe, expect, it, vi } from 'vitest';
 import HttpPollingAdapter from '../../adapter/http-polling/adapter.js';
+import { createMockLogger } from '@pagermon/ingest-core/lib/runtime/logger.js';
 
 describe('HttpPollingAdapter', () => {
   it('validates required config', () => {
     expect(() => {
-      new HttpPollingAdapter({});
+      new HttpPollingAdapter({
+        logger: createMockLogger(vi, { component: 'adapter-test' }),
+      });
     }).toThrow('INGEST_ADAPTER__API_URL is required');
   });
 
   it('starts polling and emits messages', async () => {
+    const testLogger = createMockLogger(vi, { component: 'adapter-test' });
+
     const adapter = new HttpPollingAdapter({
+      logger: testLogger,
       adapter: {
         apiUrl: 'http://test.local/api',
         pollInterval: 100,
@@ -682,19 +687,34 @@ describe('HttpPollingAdapter', () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     expect(onMessage).toHaveBeenCalled();
+    expect(testLogger.info).toHaveBeenCalled(); // should be called
 
     adapter.stop();
+    expect(testLogger.info).toHaveBeenCalledWith('Stopping'); // should be called
+  });
+
+  it('creates scoped child logger in adapter components', () => {
+    const testLogger = createMockLogger(vi, { component: 'adapter-test' });
+    const child = testLogger.child({ component: 'decoder' });
+
+    child.debug('decoder started');
+    expect(child.debug).toHaveBeenCalledWith('decoder started'); // should be called
   });
 });
 ```
+
+If you want to assert log behavior, always pass `vi` into `createMockLogger(vi, ...)` so methods are spies.
 
 ### Integration Tests
 
 Test your adapter with real dependencies if possible.
 
 ```javascript
+import { createMockLogger } from '@pagermon/ingest-core/lib/runtime/logger.js';
+
 it('fetches messages from live API', async () => {
   const adapter = new HttpPollingAdapter({
+    logger: createMockLogger(),
     adapter: {
       apiUrl: process.env.TEST_API_URL,
     },
