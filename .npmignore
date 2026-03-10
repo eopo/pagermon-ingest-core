@@ -1,0 +1,38 @@
+# Test files
+test/
+coverage/
+*.test.js
+vitest.config.js
+
+# Development files
+.husky/
+.github/
+.vscode/
+.editorconfig
+.prettierrc
+.prettierignore
+
+# Build artifacts
+*.log
+npm-debug.log*
+.DS_Store
+
+# Documentation (keep README)
+ADAPTER_DEVELOPMENT.md
+CONTRIBUTING.md
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+Dockerfile
+.dockerignore
+compose.yml
+compose.override.yml
+
+# Environment
+.env
+.env.*
+!.env.example

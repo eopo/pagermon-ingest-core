@@ -1,0 +1,58 @@
+# Dependencies (installed in container)
+node_modules/
+
+# Tests (not run in container)
+test/
+**/*.test.js
+**/*.spec.js
+coverage/
+
+# Documentation
+*.md
+docs/
+
+# Development config
+.editorconfig
+.prettierrc
+.prettierignore
+eslint.config.*
+vitest.config.*
+
+# Environment (configured at runtime)
+.env*
+stack.env
+
+# VCS
+.git/
+.gitignore
+.gitattributes
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.circleci/
+
+# IDE
+.vscode/
+.idea/
+
+# Docker files
+Dockerfile*
+compose*.yml
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+
+# Logs
+logs/
+*.log
+
+# Temporary
+tmp/
+temp/
