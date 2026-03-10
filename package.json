@@ -27,8 +27,16 @@
     "pocsag",
     "flex"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/eopo/pagermon-ingest-core"
+  },
+  "bugs": {
+    "url": "https://github.com/eopo/pagermon-ingest-core/issues"
+  },
+  "homepage": "https://github.com/eopo/pagermon-ingest-core",
   "author": "",
-  "license": "ISC",
+  "license": "Unlicense",
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=9.0"
