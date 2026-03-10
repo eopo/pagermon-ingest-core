@@ -86,6 +86,21 @@ Core test focus by layer:
 - `lib/runtime/*`: startup, shutdown, error propagation, adapter contract checks
 - `lib/core/*`: queue/API/worker behavior and failure handling
 
+### Logger Conventions
+
+Contributions that touch adapter startup/config should follow the current logger contract:
+
+- Core provides a ready-to-use logger via `config.logger`.
+- Adapters create their own scoped children via `config.logger.child({...})`.
+- Do not re-introduce adapter-specific logger helpers in adapter config.
+
+For tests, use the central helper from `lib/runtime/logger.js`:
+
+- `createMockLogger(vi)` for spy-enabled logger assertions.
+- `createMockLogger()` (or `createMockLogger(null)`) for no-op logger behavior.
+
+Avoid ad-hoc inline noop logger objects in new tests unless there is a strong reason.
+
 ### Adapter Contract Validation Test
 
 The core includes adapter loader contract checks in `test/unit/adapter-loader.test.js`.

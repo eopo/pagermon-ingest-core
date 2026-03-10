@@ -49,8 +49,16 @@ async function loadRunService({ queueInitReject = null, triggerOnError = false }
       enableDLQ: true,
       healthCheckInterval: 100,
       healthCheckUnhealthyThreshold: 2,
+      metricsEnabled: false,
+      metricsPort: 9464,
+      metricsHost: '0.0.0.0',
+      metricsPath: '/metrics',
+      metricsPrefix: 'pagermon_ingest_',
+      metricsCollectDefault: true,
+      metricQueuePollInterval: 5000,
       validate: vi.fn(),
       buildAdapterConfig: vi.fn(() => ({ adapter: { frequencies: '123' } })),
+      buildMetricsConfig: vi.fn(() => ({ enabled: false })),
     },
   }));
 
@@ -91,6 +99,17 @@ async function loadRunService({ queueInitReject = null, triggerOnError = false }
         return services.orchestrator;
       }
     },
+  }));
+
+  vi.doMock('../../lib/runtime/metrics.js', () => ({
+    createMetrics: vi.fn(() => ({
+      counter: vi.fn(() => ({ labels: vi.fn(() => ({ inc: vi.fn() })), inc: vi.fn() })),
+      gauge: vi.fn(() => ({ labels: vi.fn(() => ({ set: vi.fn() })), set: vi.fn() })),
+      histogram: vi.fn(() => ({ labels: vi.fn(() => ({ observe: vi.fn() })), observe: vi.fn() })),
+      expose: vi.fn(() => Promise.resolve('# HELP test\ntest 1')),
+      listen: vi.fn(() => Promise.resolve()),
+      close: vi.fn(),
+    })),
   }));
 
   const { runService } = await import('../../lib/runtime/service.js');

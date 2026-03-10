@@ -1,3 +1,4 @@
+import { createAdapterFromClass } from './lib/runtime/adapter-loader.js';
 import { runService } from './lib/runtime/service.js';
 
 export function bootstrapWithAdapter(AdapterClass) {
@@ -5,6 +6,7 @@ export function bootstrapWithAdapter(AdapterClass) {
     throw new TypeError('bootstrapWithAdapter requires an adapter class/constructor');
   }
 
-  const adapterFactory = (adapterConfig) => new AdapterClass(adapterConfig);
-  return runService({ adapterFactory });
+  return runService({
+    adapterFactory: (adapterConfig) => createAdapterFromClass(AdapterClass, adapterConfig),
+  });
 }

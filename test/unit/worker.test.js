@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import Worker from '../../lib/core/Worker.js';
+import { makeMetrics } from '../helpers/metrics.js';
 
 function createWorkerDeps() {
   const startProcessing = vi.fn();
@@ -20,7 +21,7 @@ function createWorkerDeps() {
     isHealthy: true,
   };
 
-  return { queue, apiClient, health, startProcessing, closeFn };
+  return { queue, apiClient, health, metrics: makeMetrics(), startProcessing, closeFn };
 }
 
 describe('Worker', () => {
@@ -31,8 +32,8 @@ describe('Worker', () => {
   });
 
   it('starts and registers queue processor', async () => {
-    const { queue, apiClient, health, startProcessing } = createWorkerDeps();
-    const worker = new Worker({ queue, apiClient, health });
+    const { queue, apiClient, health, metrics, startProcessing } = createWorkerDeps();
+    const worker = new Worker({ queue, apiClient, health, metrics });
 
     await worker.start();
 
@@ -41,35 +42,39 @@ describe('Worker', () => {
   });
 
   it('emits processed callback on success', async () => {
-    const { queue, apiClient, health } = createWorkerDeps();
+    const { queue, apiClient, health, metrics } = createWorkerDeps();
     apiClient.submitMessage.mockResolvedValue({ ok: true });
 
-    const worker = new Worker({ queue, apiClient, health });
+    const worker = new Worker({ queue, apiClient, health, metrics });
+    // counter() is called twice in constructor (processedCounter, failedCounter)
+    const processedCounter = metrics.counter.mock.results[0].value;
     const cb = vi.fn();
     worker.on('messageProcessed', cb);
 
     const result = await worker._processMessage({ id: '1', data: { address: '123' } });
     expect(result).toEqual({ ok: true });
     expect(cb).toHaveBeenCalledTimes(1);
+    expect(processedCounter.labels).toHaveBeenCalledWith({ status: 'success' });
+    expect(processedCounter.inc).toHaveBeenCalledTimes(1);
   });
 
   it('throws when API unhealthy', async () => {
-    const { queue, apiClient, health } = createWorkerDeps();
+    const { queue, apiClient, health, metrics } = createWorkerDeps();
     apiClient.submitMessage.mockRejectedValue(new Error('500 error'));
     health.isHealthy = false;
 
-    const worker = new Worker({ queue, apiClient, health });
+    const worker = new Worker({ queue, apiClient, health, metrics });
     await expect(worker._processMessage({ id: '1', data: { address: '123' } })).rejects.toThrow('API unhealthy');
   });
 
   it('returns without throwing for non-retryable 4xx and emits failed callback', async () => {
-    const { queue, apiClient, health } = createWorkerDeps();
+    const { queue, apiClient, health, metrics } = createWorkerDeps();
     const clientError = new Error('404 not found');
     clientError.name = 'ApiError';
     clientError.statusCode = 404;
     clientError.retryable = false;
     apiClient.submitMessage.mockRejectedValue(clientError);
-    const worker = new Worker({ queue, apiClient, health });
+    const worker = new Worker({ queue, apiClient, health, metrics });
 
     const cb = vi.fn();
     worker.on('messageFailed', cb);
@@ -81,8 +86,8 @@ describe('Worker', () => {
   });
 
   it('stops and closes queue', async () => {
-    const { queue, apiClient, health, closeFn } = createWorkerDeps();
-    const worker = new Worker({ queue, apiClient, health });
+    const { queue, apiClient, health, metrics, closeFn } = createWorkerDeps();
+    const worker = new Worker({ queue, apiClient, health, metrics });
 
     await worker.stop();
 
@@ -91,13 +96,13 @@ describe('Worker', () => {
   });
 
   it('returns without throwing for authentication failures (non-retryable)', async () => {
-    const { queue, apiClient, health } = createWorkerDeps();
+    const { queue, apiClient, health, metrics } = createWorkerDeps();
     const authError = new Error('401 Unauthorized');
     authError.name = 'ApiError';
     authError.statusCode = 401;
     authError.retryable = false;
     apiClient.submitMessage.mockRejectedValue(authError);
-    const worker = new Worker({ queue, apiClient, health });
+    const worker = new Worker({ queue, apiClient, health, metrics });
 
     const cb = vi.fn();
     worker.on('messageFailed', cb);
@@ -108,13 +113,13 @@ describe('Worker', () => {
   });
 
   it('throws server-side failures for BullMQ retry with exponential backoff', async () => {
-    const { queue, apiClient, health } = createWorkerDeps();
+    const { queue, apiClient, health, metrics } = createWorkerDeps();
     const serverError = new Error('500 Internal Server Error');
     serverError.name = 'ApiError';
     serverError.statusCode = 500;
     serverError.retryable = true;
     apiClient.submitMessage.mockRejectedValue(serverError);
-    const worker = new Worker({ queue, apiClient, health });
+    const worker = new Worker({ queue, apiClient, health, metrics });
 
     const cb = vi.fn();
     worker.on('messageFailed', cb);
