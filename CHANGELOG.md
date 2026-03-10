@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.0](https://github.com/eopo/pagermon-ingest-core/compare/1.3.1...1.4.0) (2026-03-10)
+
+
+### Features
+
+* implement centralized logging with pino and update adapter logging practices ([2f2d9dc](https://github.com/eopo/pagermon-ingest-core/commit/2f2d9dc1f4eab1172d6aa2310236698c7b9958b1))
+* **logging:** implement centralized logging with pino and update logger usage across the codebase ([5f50d22](https://github.com/eopo/pagermon-ingest-core/commit/5f50d22cda49496c3779a9b02056b709937eeb95))
+* **metrics:** integrate Prometheus metrics for message processing ([8d46097](https://github.com/eopo/pagermon-ingest-core/commit/8d4609730f6c61fa042ae1e0ee02b690e661538a))
+* **metrics:** integrate Prometheus metrics for message processing ([364b052](https://github.com/eopo/pagermon-ingest-core/commit/364b0522c29b59da5b4bb5bcbe0580b910bbeecd))
+
 ## [1.3.1](https://github.com/eopo/pagermon-ingest-core/compare/1.3.0...1.3.1) (2026-03-10)
 
 
