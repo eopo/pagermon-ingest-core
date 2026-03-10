@@ -11,6 +11,18 @@ describe('bootstrapWithAdapter', () => {
       constructor(config) {
         this.config = config;
       }
+
+      getName() {
+        return 'test-adapter';
+      }
+
+      start() {}
+
+      stop() {}
+
+      isRunning() {
+        return false;
+      }
     }
 
     const { bootstrapWithAdapter } = await import('../../bootstrap.js');
