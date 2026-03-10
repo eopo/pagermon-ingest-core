@@ -1,16 +1,20 @@
 # Lefthook configuration for PagerMon Ingest Core
 # @see https://github.com/evilmartians/lefthook
 
-# Skip hooks in CI environments
-skip_output:
-  - meta
-  - execution
-
 pre-commit:
   commands:
-    lint:
+    lint-and-format:
       glob: "**/*.{js,mjs,json,md}"
-      run: npx lint-staged
+      run: npx lint-staged --verbose
+      skip:
+        - merge
+        - rebase
+
+pre-push:
+  commands:
+    test:
+      glob: "**/*.js"
+      run: npm run test-ci
       skip:
         - merge
         - rebase
@@ -18,4 +22,4 @@ pre-commit:
 commit-msg:
   commands:
     commitlint:
-      run: npx commitlint --edit {1}
+      run: npx commitlint --edit $GIT_PARAMS
