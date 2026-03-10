@@ -10,15 +10,6 @@ pre-commit:
         - merge
         - rebase
 
-pre-push:
-  commands:
-    test:
-      glob: "**/*.js"
-      run: npm run test-ci
-      skip:
-        - merge
-        - rebase
-
 commit-msg:
   commands:
     commitlint:
