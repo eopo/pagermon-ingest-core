@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.3.0](https://github.com/eopo/pagermon-ingest-core/compare/v1.2.0...1.3.0) (2026-03-10)
+
+
+### Features
+
+* add dependabot configuration for npm, docker, and GitHub Actions ([d45e928](https://github.com/eopo/pagermon-ingest-core/commit/d45e928cd62dd30315fbba636e3f03b6baabca82))
+* enhance release-please workflow with optional release version input ([dd998a7](https://github.com/eopo/pagermon-ingest-core/commit/dd998a722fd12b7ccb44d2af6772d7a1126424a7))
+* modify CI workflow to target 'dev' branch instead of 'develop' ([dd998a7](https://github.com/eopo/pagermon-ingest-core/commit/dd998a722fd12b7ccb44d2af6772d7a1126424a7))
+
+
+### Bug Fixes
+
+* **deps:** bump actions/setup-node from 4 to 6 ([0ce56bf](https://github.com/eopo/pagermon-ingest-core/commit/0ce56bff21116c43630d923b9113c224447ca507))
+* **deps:** bump actions/setup-node from 4 to 6 ([1b96a87](https://github.com/eopo/pagermon-ingest-core/commit/1b96a87dcf866d3f564c0c231169d6ec719248a7))
+* update dependabot prefixes to use "fix" instead of "chore" for better clarity ([dd998a7](https://github.com/eopo/pagermon-ingest-core/commit/dd998a722fd12b7ccb44d2af6772d7a1126424a7))
+
 ## [1.2.0](https://github.com/eopo/pagermon-ingest-core/compare/v1.1.0...v1.2.0) (2026-03-10)
 
 
