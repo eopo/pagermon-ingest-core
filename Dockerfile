@@ -13,7 +13,7 @@ RUN mkdir -p /app/adapter
 
 # Install only production dependencies.
 COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 # Copy application code.
 COPY . .
