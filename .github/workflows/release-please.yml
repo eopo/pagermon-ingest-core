@@ -13,7 +13,26 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+      
+      - name: Trigger adapter rebuild
+        if: steps.release.outputs.release_created
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          repository: eopo/pagermon-ingest-adapter-multimon
+          event-type: core-updated
+          client-payload: |
+            {
+              "core_version": "${{ steps.release.outputs.tag_name }}",
+              "core_major": "${{ steps.release.outputs.major }}",
+              "core_minor": "${{ steps.release.outputs.minor }}",
+              "core_patch": "${{ steps.release.outputs.patch }}"
+            }
