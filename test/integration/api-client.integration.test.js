@@ -27,7 +27,7 @@ describe('ApiClient integration', () => {
         const body = await readRequestBody(req);
         const parsed = JSON.parse(body || '{}');
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ accepted: true, address: parsed.address }));
+        res.end(JSON.stringify({ status: 'ok', id: 42, reason: 'created', address: parsed.address }));
         return;
       }
 
@@ -58,7 +58,9 @@ describe('ApiClient integration', () => {
       source: 'integration-test',
     });
 
-    expect(result.accepted).toBe(true);
+    expect(result.status).toBe('ok');
+    expect(result.id).toBe(42);
+    expect(result.reason).toBe('created');
     expect(result.address).toBe('12345');
   });
 
