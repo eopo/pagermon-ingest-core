@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createMockLogger } from '../../lib/runtime/logger.js';
 
 const queueInstances = [];
 const workerInstances = [];
@@ -151,8 +152,16 @@ describe('QueueManager', () => {
   });
 
   it('starts worker once and wires error handler', () => {
-    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
+    const mockLogger = createMockLogger(vi);
+
+    const manager = new QueueManager(
+      { redisUrl: 'redis://localhost:6379' },
+      {
+        logger: mockLogger,
+        metrics: makeMetrics(),
+      }
+    );
+
     manager.initialize();
 
     const processor = vi.fn((job) => Promise.resolve({ ok: true, id: job.id }));
@@ -164,8 +173,7 @@ describe('QueueManager', () => {
     expect(workerInstances[0].on).toHaveBeenCalledWith('error', expect.any(Function));
 
     workerInstances[0].handlers.error(new Error('worker failed'));
-    expect(errorSpy).toHaveBeenCalledWith('[QUEUE] Worker error:', 'worker failed');
-    errorSpy.mockRestore();
+    expect(mockLogger.error).toHaveBeenCalledWith('Worker error:', 'worker failed');
   });
 
   it('closes worker, queues and redis connections', async () => {
