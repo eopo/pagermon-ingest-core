@@ -18,7 +18,7 @@
     "format:check": "prettier --check \"**/*.{js,mjs,json,md}\"",
     "check": "npm run format:check && npm run lint",
     "hooks:install": "lefthook install",
-    "prepare": "[ -z \"$CI\" ] && npm run hooks:install || true"
+    "prepare": "node ./scripts/prepare-hooks.mjs"
   },
   "lint-staged": {
     "*.{js,mjs}": [
