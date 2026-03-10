@@ -1,11 +1,16 @@
 # @pagermon/ingest-core
 
+[![npm version](https://img.shields.io/npm/v/%40pagermon%2Fingest-core.svg)](https://www.npmjs.com/package/@pagermon/ingest-core)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![License](https://img.shields.io/github/license/eopo/pagermon-ingest-core.svg)](LICENSE)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/eopo/pagermon-ingest-core/ci.yml?branch=main&label=CI)](https://github.com/eopo/pagermon-ingest-core/actions)
+
 Shared ingest core runtime for PagerMon.
 
 ---
 
 > **Looking to run PagerMon Ingest with RTL-SDR?**  
-> You probably want the [multimon adapter repository](https://github.com/eopo/ingest-adapter-multimon) instead.  
+> You probably want the [multimon adapter repository](https://github.com/eopo/pagermon-ingest-adapter-multimon) instead.  
 > This repository is the shared core runtime library and is only relevant if you're developing custom adapters or contributing to the core.
 
 ---
