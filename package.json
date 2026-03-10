@@ -14,8 +14,8 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write \"**/*.{js,mjs,json,md}\"",
-    "format:check": "prettier --check \"**/*.{js,mjs,json,md}\"",
+    "format": "prettier --config .prettierrc --ignore-path .prettierignore --write \"**/*.{js,mjs,json,md}\"",
+    "format:check": "prettier --config .prettierrc --ignore-path .prettierignore --check \"**/*.{js,mjs,json,md}\"",
     "check": "npm run format:check && npm run lint",
     "hooks:install": "lefthook install",
     "prepare": "node ./scripts/prepare-hooks.mjs"
@@ -23,10 +23,10 @@
   "lint-staged": {
     "*.{js,mjs}": [
       "eslint --fix",
-      "prettier --write"
+      "prettier --config .prettierrc --ignore-path .prettierignore --write"
     ],
     "*.{json,md}": [
-      "prettier --write"
+      "prettier --config .prettierrc --ignore-path .prettierignore --write"
     ]
   },
   "keywords": [
