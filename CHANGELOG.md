@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/eopo/pagermon-ingest-core/compare/1.3.0...1.3.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* **worker:** improve error handling for unhealthy API state ([6f3b984](https://github.com/eopo/pagermon-ingest-core/commit/6f3b984f88b991345ae153e6c161b21ceeaa8119))
+
 ## [1.3.0](https://github.com/eopo/pagermon-ingest-core/compare/v1.2.0...1.3.0) (2026-03-10)
 
 
