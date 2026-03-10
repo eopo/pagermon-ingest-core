@@ -1,6 +1,6 @@
 {
   "name": "@pagermon/ingest-core",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "PagerMon ingest core runtime",
   "type": "module",
   "main": "index.js",

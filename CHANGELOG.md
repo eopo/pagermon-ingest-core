@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/eopo/pagermon-ingest-core/compare/v1.1.0...v1.2.0) (2026-03-10)
+
+
+### Features
+
+* update ApiClient integration and unit tests to simplify response handling ([bc0d0ed](https://github.com/eopo/pagermon-ingest-core/commit/bc0d0ed22c28419080e9d6cbfdb892dec83c2225))
+
+
+### Bug Fixes
+
+* skip lefthook install in production builds ([1ace8ac](https://github.com/eopo/pagermon-ingest-core/commit/1ace8ac6883d32bc7a2f067d67eede7c4544a9d2))
+
 ## [1.1.0](https://github.com/eopo/pagermon-ingest-core/compare/v1.0.5...v1.1.0) (2026-03-10)
 
 
