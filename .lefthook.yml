@@ -1,0 +1,15 @@
+# Lefthook configuration for PagerMon Ingest Core
+# @see https://github.com/evilmartians/lefthook
+
+pre-commit:
+  commands:
+    lint-and-format:
+      run: npx lint-staged
+      skip:
+        - merge
+        - rebase
+
+commit-msg:
+  commands:
+    commitlint:
+      run: npx commitlint --edit $GIT_PARAMS

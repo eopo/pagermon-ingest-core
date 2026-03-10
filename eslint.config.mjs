@@ -25,7 +25,15 @@ export default [
       camelcase: ['warn', { properties: 'never', ignoreDestructuring: true }],
 
       // Code quality
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_|^err$',
+          caughtErrors: 'all',
+          caughtErrorsIgnorePattern: '^_|^err$',
+        },
+      ],
       'no-unused-expressions': 'off',
       'no-use-before-define': ['error', { functions: false, classes: true, variables: true }],
 
