@@ -1,0 +1,50 @@
+{
+  "name": "@pagermon/ingest-core",
+  "version": "1.0.0",
+  "description": "PagerMon ingest core runtime",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "vitest run --coverage",
+    "test:all": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:integration": "vitest run test/integration",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{js,mjs,json,md}\"",
+    "format:check": "prettier --check \"**/*.{js,mjs,json,md}\"",
+    "check": "npm run format:check && npm run lint",
+    "prepare": "husky"
+  },
+  "keywords": [
+    "pagermon",
+    "sdr",
+    "rtl-sdr",
+    "multimon-ng",
+    "pocsag",
+    "flex"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=9.0"
+  },
+  "dependencies": {
+    "bullmq": "^5.63.0",
+    "ioredis": "^5.8.2"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "globals": "^15.14.0",
+    "husky": "^9.1.7",
+    "prettier": "^3.4.2",
+    "vitest": "^2.1.8"
+  }
+}
