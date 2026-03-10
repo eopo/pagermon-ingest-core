@@ -166,6 +166,16 @@ Build core image:
 docker build -t shutterfire/pagermon-ingest-core:latest .
 ```
 
+### Build Exactly From A Release Tag
+
+For reproducible self-builds, build from a Git tag instead of a moving branch:
+
+```bash
+git fetch --tags
+git checkout <release-tag>   # e.g. v1.3.1
+docker build -t shutterfire/pagermon-ingest-core:<release-tag> .
+```
+
 ## Using Ingest with PagerMon Server
 
 Ingest sends messages to PagerMon server API endpoint `INGEST_CORE__API_URL`.
