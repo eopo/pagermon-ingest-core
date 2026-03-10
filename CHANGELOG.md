@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.5](https://github.com/eopo/pagermon-ingest-core/compare/v1.0.4...v1.0.5) (2026-03-10)
+
+
+### Bug Fixes
+
+* update API key header format in ApiClient ([ee3f32a](https://github.com/eopo/pagermon-ingest-core/commit/ee3f32af019033fb6f425b6df3deb94f23ef8933))
+
 ## [1.0.4](https://github.com/eopo/pagermon-ingest-core/compare/v1.0.2...v1.0.4) (2026-03-10)
 
 
