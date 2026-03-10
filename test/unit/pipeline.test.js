@@ -9,6 +9,7 @@ vi.mock('../../lib/runtime/adapter-loader.js', () => ({
 }));
 
 import Orchestrator from '../../lib/runtime/pipeline.js';
+import { makeMetrics } from '../helpers/metrics.js';
 
 describe('Orchestrator', () => {
   beforeEach(() => {
@@ -19,11 +20,15 @@ describe('Orchestrator', () => {
     expect(() => new Orchestrator({})).toThrow('Orchestrator requires adapter config');
   });
 
+  it('requires metrics', () => {
+    expect(() => new Orchestrator({ adapter: {} })).toThrow('Orchestrator requires config.metrics');
+  });
+
   it('initializes adapter from loader', async () => {
     const adapter = { getName: () => 'fake', isRunning: () => true };
     createAdapterMock.mockResolvedValue(adapter);
 
-    const orchestrator = new Orchestrator({ adapter: { foo: 'bar' } });
+    const orchestrator = new Orchestrator({ adapter: { foo: 'bar' }, metrics: makeMetrics() });
     await orchestrator.initialize();
 
     expect(createAdapterMock).toHaveBeenCalledWith({ foo: 'bar' });
@@ -40,17 +45,16 @@ describe('Orchestrator', () => {
     };
     createAdapterMock.mockResolvedValue(adapter);
 
-    const orchestrator = new Orchestrator({ adapter: { foo: 'bar' } });
+    const metrics = makeMetrics();
+    const orchestrator = new Orchestrator({ adapter: { foo: 'bar' }, metrics });
+    const adapterUpGauge = metrics.gauge.mock.results[0].value;
     await orchestrator.initialize();
 
-    const onMessage = vi.fn();
-    const onClose = vi.fn();
-    const onError = vi.fn();
-
-    await orchestrator.startReadingMessages(onMessage, onClose, onError);
-    expect(adapter.start).toHaveBeenCalledWith(onMessage, onClose, onError);
+    await orchestrator.startReadingMessages(vi.fn(), vi.fn(), vi.fn());
+    expect(adapterUpGauge.set).toHaveBeenCalledWith(1);
 
     await orchestrator.shutdown();
     expect(adapter.stop).toHaveBeenCalledTimes(1);
+    expect(adapterUpGauge.set).toHaveBeenLastCalledWith(0);
   });
 });

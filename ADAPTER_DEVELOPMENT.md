@@ -318,6 +318,135 @@ import Message from '@pagermon/ingest-core/lib/message/Message.js';
 | `timestamp` | `number` | Unix timestamp (seconds) |
 | `time`      | `string` | ISO8601 datetime string  |
 
+## Adapter-Specific Metrics (Optional)
+
+The core runtime provides an optional metrics API for adapters to report adapter-specific metrics.
+Metrics are completely optional – your adapter does not need to use them.
+
+### Enabling Metrics
+
+Metrics are only exposed if the operator enables them via:
+
+```bash
+INGEST_CORE__METRICS_ENABLED=true
+```
+
+If disabled, all metric calls are silent no-ops – your adapter code doesn't need to check anything.
+
+### Using Metrics in Your Adapter
+
+The core passes a `metrics` object to your adapter via `config.metrics`. You can call metrics methods directly without any checks:
+
+```javascript
+import Message from '@pagermon/ingest-core/lib/message/Message.js';
+
+class MyCustomAdapter {
+  constructor(config = {}) {
+    this.config = config;
+    this.metrics = config.metrics; // Always available (no-op if disabled)
+
+    // Create custom counters for your adapter
+    this.parseCounter = this.metrics.counter({
+      name: 'my_adapter_parse_total',
+      help: 'Total messages parsed',
+      labelNames: ['status'],
+    });
+
+    this.decodeErrorCounter = this.metrics.counter({
+      name: 'my_adapter_decode_errors_total',
+      help: 'Total decode errors',
+      labelNames: ['error_type'],
+    });
+
+    // Create a gauge to track buffer utilization
+    this.bufferGauge = this.metrics.gauge({
+      name: 'my_adapter_buffer_utilization',
+      help: 'Current buffer utilization percentage',
+    });
+  }
+
+  start(onMessage, onClose, onError) {
+    // ... your adapter logic ...
+
+    try {
+      const message = this.parseData(data);
+
+      // Record successful parse – works whether metrics are enabled or not
+      this.parseCounter.labels({ status: 'success' }).inc();
+
+      // Update buffer gauge
+      const utilization = (this.buffer.used / this.buffer.capacity) * 100;
+      this.bufferGauge.set(utilization);
+
+      onMessage(message);
+    } catch (err) {
+      // Record parse error – no checks needed
+      this.decodeErrorCounter.labels({ error_type: err.code }).inc();
+      onError(err);
+    }
+  }
+
+  stop() {
+    // ... cleanup ...
+  }
+
+  isRunning() {
+    // ... return status ...
+  }
+
+  getName() {
+    return 'my-custom-adapter';
+  }
+}
+
+export default MyCustomAdapter;
+```
+
+### Metric Types
+
+Three metric types are available:
+
+**Counter** – Only increments (used for event counts)
+
+```javascript
+counter.inc(); // +1 (default)
+counter.inc(5); // +5
+counter.labels({ status: 'ok' }).inc(); // with specific label values
+```
+
+**Histogram** – Track distributions (used for latencies)
+
+```javascript
+histogram.observe(0.123);         // Record a value
+const end = histogram.startTimer(); // Auto-timing
+// ... do work ...
+end();                            // Records duration
+histogram.labels({ ... }).observe(0.456);  // with labels
+```
+
+### Best Practices
+
+- **Keep label cardinality low**: Avoid high-cardinality labels like user IDs or request IDs. Use at most 2-3 labels per metric.
+- **Use standard units**: Durations in seconds, sizes in bytes.
+- **Name based on value**: Counters end with `_total`, durations with `_seconds`, percentages with `_ratio`.
+- **Don't check if enabled**: The metrics object works transparently – calls are no-ops if disabled.
+- **Metrics are optional**: Your adapter will work fine without any custom metrics.
+
+### Example Configuration
+
+If your adapter uses metrics, document them in your README:
+
+```bash
+# Enable metrics in your adapter's docker-compose or k8s config
+INGEST_CORE__METRICS_ENABLED=true
+
+# Optional: customize the metrics endpoint
+INGEST_CORE__METRICS_PORT=9464
+INGEST_CORE__METRICS_PATH=/metrics
+```
+
+Your custom metrics will be exposed alongside core metrics at the same endpoint.
+
 ### Creating Messages
 
 ````javascript

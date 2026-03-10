@@ -68,4 +68,68 @@ describe('config', () => {
     exitSpy.mockRestore();
     errorSpy.mockRestore();
   });
+
+  it('parses metrics configuration from environment', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_KEY: 'abc123',
+      INGEST_CORE__METRICS_ENABLED: 'true',
+      INGEST_CORE__METRICS_PORT: '9090',
+      INGEST_CORE__METRICS_HOST: '127.0.0.1',
+      INGEST_CORE__METRICS_PATH: '/custom-metrics',
+      INGEST_CORE__METRICS_PREFIX: 'custom_',
+      INGEST_CORE__METRICS_COLLECT_DEFAULT: 'false',
+    });
+
+    expect(config.metricsEnabled).toBe(true);
+    expect(config.metricsPort).toBe(9090);
+    expect(config.metricsHost).toBe('127.0.0.1');
+    expect(config.metricsPath).toBe('/custom-metrics');
+    expect(config.metricsPrefix).toBe('custom_');
+    expect(config.metricsCollectDefault).toBe(false);
+  });
+
+  it('uses sane defaults for metrics configuration', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_KEY: 'abc123',
+    });
+
+    expect(config.metricsEnabled).toBe(false); // disabled by default
+    expect(config.metricsPort).toBe(9464);
+    expect(config.metricsHost).toBe('0.0.0.0');
+    expect(config.metricsPath).toBe('/metrics');
+    expect(config.metricsPrefix).toBe('pagermon_ingest_');
+    expect(config.metricsCollectDefault).toBe(true);
+  });
+
+  it('parses metrics default labels from CSV', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_KEY: 'abc123',
+      INGEST_CORE__METRICS_DEFAULT_LABELS: 'env=prod,service=ingest,region=eu',
+    });
+
+    const metricsConfig = config.buildMetricsConfig();
+    expect(metricsConfig.defaultLabels).toEqual({
+      env: 'prod',
+      service: 'ingest',
+      region: 'eu',
+    });
+  });
+
+  it('buildMetricsConfig returns correct structure', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_KEY: 'abc123',
+      INGEST_CORE__METRICS_ENABLED: 'true',
+      INGEST_CORE__METRICS_PREFIX: 'test_',
+      INGEST_CORE__METRICS_DEFAULT_LABELS: 'env=test',
+      INGEST_CORE__METRICS_COLLECT_DEFAULT: 'false',
+    });
+
+    const metricsConfig = config.buildMetricsConfig();
+    expect(metricsConfig).toEqual({
+      enabled: true,
+      prefix: 'test_',
+      defaultLabels: { env: 'test' },
+      collectDefaults: false,
+    });
+  });
 });

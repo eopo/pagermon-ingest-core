@@ -58,6 +58,7 @@ vi.mock('ioredis', () => {
 });
 
 import QueueManager from '../../lib/core/QueueManager.js';
+import { makeMetrics } from '../helpers/metrics.js';
 
 describe('QueueManager', () => {
   beforeEach(() => {
@@ -70,8 +71,14 @@ describe('QueueManager', () => {
     expect(() => new QueueManager({})).toThrow('QueueManager requires config.redisUrl');
   });
 
+  it('validates metrics', () => {
+    expect(() => new QueueManager({ redisUrl: 'redis://localhost:6379' })).toThrow(
+      'QueueManager requires options.metrics'
+    );
+  });
+
   it('initializes queue and dlq with defaults', () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
     manager.initialize();
 
     expect(redisInstances).toHaveLength(1);
@@ -81,33 +88,32 @@ describe('QueueManager', () => {
   });
 
   it('adds message with Message-like payload and builds deterministic job id', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { queueName: 'test-q' });
+    const metrics = makeMetrics();
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { queueName: 'test-q', metrics });
     manager.initialize();
+    const enqueuedCounter = metrics.counter.mock.results[0].value;
+    const queueDepthGauge = metrics.gauge.mock.results[0].value;
 
-    const payload = {
-      source: 'rx1',
-      address: '12345',
-      timestamp: 1710000000,
-    };
-
-    await manager.addMessage({
-      toPayload() {
-        return payload;
-      },
-    });
+    const payload = { source: 'rx1', address: '12345', timestamp: 1710000000 };
+    await manager.addMessage({ toPayload: () => payload });
 
     expect(queueInstances[0].add).toHaveBeenCalledWith('message', payload, {
       jobId: 'msg-rx1-12345-1710000000',
     });
+    expect(enqueuedCounter.inc).toHaveBeenCalledTimes(1);
+    expect(queueDepthGauge.inc).toHaveBeenCalledTimes(1);
   });
 
   it('throws when adding before initialize', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
     await expect(manager.addMessage({})).rejects.toThrow('Queue not initialized');
   });
 
   it('returns empty dead letters when DLQ disabled', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { enableDLQ: false });
+    const manager = new QueueManager(
+      { redisUrl: 'redis://localhost:6379' },
+      { enableDLQ: false, metrics: makeMetrics() }
+    );
     manager.initialize();
 
     const jobs = await manager.getDeadLetters(10);
@@ -115,7 +121,7 @@ describe('QueueManager', () => {
   });
 
   it('maps dead letter jobs with limit handling', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
     manager.initialize();
 
     queueInstances[1].getJobs.mockResolvedValue([
@@ -140,13 +146,13 @@ describe('QueueManager', () => {
   });
 
   it('returns queue size 0 when queue is not initialized', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
     await expect(manager.getQueueSize()).resolves.toBe(0);
   });
 
   it('starts worker once and wires error handler', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
     manager.initialize();
 
     const processor = vi.fn((job) => Promise.resolve({ ok: true, id: job.id }));
@@ -163,7 +169,7 @@ describe('QueueManager', () => {
   });
 
   it('closes worker, queues and redis connections', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
     manager.initialize();
     manager.startProcessing(() => Promise.resolve({ ok: true }));
 
