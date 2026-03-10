@@ -825,8 +825,8 @@ npm install your-adapter-package
 
 ## Getting Help
 
-- **Core issues**: [pagermon/ingest-core](https://github.com/pagermon/ingest-core/issues)
-- **Multimon adapter**: [pagermon/ingest-adapter-multimon](https://github.com/pagermon/ingest-adapter-multimon/issues)
+- **Core issues**: [eopo/ingest-core](https://github.com/eopo/ingest-core/issues)
+- **Multimon adapter**: [eopo/ingest-adapter-multimon](https://github.com/eopo/ingest-adapter-multimon/issues)
 - **Community**: PagerMon Discord/Slack
 
 When asking for help, include:

@@ -5,7 +5,7 @@ Shared ingest core runtime for PagerMon.
 ---
 
 > **Looking to run PagerMon Ingest with RTL-SDR?**  
-> You probably want the [multimon adapter repository](https://github.com/pagermon/ingest-adapter-multimon) instead.  
+> You probably want the [multimon adapter repository](https://github.com/eopo/ingest-adapter-multimon) instead.  
 > This repository is the shared core runtime library and is only relevant if you're developing custom adapters or contributing to the core.
 
 ---
