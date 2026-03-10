@@ -119,6 +119,25 @@ npm test
 
 ## Container
 
+### Pre-built Images
+
+Pre-built images are available from two registries:
+
+- **Docker Hub**: `shutterfire/pagermon-ingest-core`
+- **GitHub Container Registry**: `ghcr.io/eopo/pagermon-ingest-core`
+
+Both registries contain identical images. Choose based on your preference:
+
+```bash
+# Docker Hub
+docker pull shutterfire/pagermon-ingest-core:latest
+
+# Or GitHub Container Registry
+docker pull ghcr.io/eopo/pagermon-ingest-core:latest
+```
+
+### Building Locally
+
 Build core image:
 
 ```bash

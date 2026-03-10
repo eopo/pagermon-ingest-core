@@ -434,7 +434,7 @@ CMD ["node", "index.js"]
 Or extend multimon adapter:
 
 ```dockerfile
-FROM shutterfire/ingest-multimon:latest
+FROM shutterfire/pagermon-ingest-multimon:latest
 
 # Add your custom overlay adapter
 COPY adapter/custom-overlay/ /opt/pagermon-adapter/
