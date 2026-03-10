@@ -72,8 +72,8 @@ describe('ApiClient unit behavior', () => {
     expect(() => new ApiClient({ url: 'http://x' }, {})).toThrow('ApiClient requires config.apiKey');
   });
 
-  it('submits payload successfully and sends JSON body', async () => {
-    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' }, { retries: 0 });
+  it('submits payload successfully and returns API response', async () => {
+    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' });
     queueScenario({ statusCode: 200, data: '{"accepted":true}' });
 
     const result = await client.submitMessage({
@@ -82,43 +82,55 @@ describe('ApiClient unit behavior', () => {
       },
     });
 
-    expect(result).toEqual({ success: true, data: { accepted: true } });
+    expect(result).toEqual({ accepted: true });
     expect(httpRequestMock).toHaveBeenCalledTimes(1);
   });
 
-  it('returns false result on auth/client errors without retries', async () => {
-    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' }, { retries: 3, retryDelay: 0 });
+  it('throws ApiError with retryable=false on 401', async () => {
+    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' });
     queueScenario({ statusCode: 401, data: 'denied' });
 
-    const result = await client.submitMessage({ address: 'x' });
-
-    expect(result.success).toBe(false);
-    expect(result.error).toContain('Unauthorized');
-    expect(httpRequestMock).toHaveBeenCalledTimes(1);
+    await expect(client.submitMessage({ address: 'x' })).rejects.toMatchObject({
+      name: 'ApiError',
+      statusCode: 401,
+      retryable: false,
+    });
   });
 
-  it('retries transient server failures and eventually succeeds', async () => {
-    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' }, { retries: 2, retryDelay: 0 });
+  it('throws ApiError with retryable=false on 4xx', async () => {
+    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' });
+    queueScenario({ statusCode: 404, data: 'not found' });
+
+    await expect(client._request('GET', '/api/test')).rejects.toMatchObject({
+      name: 'ApiError',
+      statusCode: 404,
+      retryable: false,
+    });
+  });
+
+  it('throws ApiError with retryable=true on 5xx', async () => {
+    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' });
     queueScenario({ statusCode: 500, data: 'boom' });
-    queueScenario({ statusCode: 503, data: 'still-boom' });
-    queueScenario({ statusCode: 200, data: '{"ok":true}' });
 
-    const result = await client._request('GET', '/api/health');
-
-    expect(result).toEqual({ ok: true });
-    expect(httpRequestMock).toHaveBeenCalledTimes(3);
+    await expect(client._request('GET', '/api/health')).rejects.toMatchObject({
+      name: 'ApiError',
+      statusCode: 500,
+      retryable: true,
+    });
   });
 
-  it('marks connectivity errors as transient', () => {
-    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' }, { retries: 0 });
-    expect(client._isTransientError({ code: 'ECONNREFUSED' })).toBe(true);
-    expect(client._isTransientError({ code: 'ETIMEDOUT' })).toBe(true);
-    expect(client._isTransientError({ code: 'EHOSTUNREACH' })).toBe(true);
-    expect(client._isTransientError({ code: 'ENOENT' })).toBe(false);
+  it('throws TimeoutError with retryable=true on timeout', async () => {
+    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' });
+    queueScenario({ timeout: true });
+
+    await expect(client._request('GET', '/api/test')).rejects.toMatchObject({
+      name: 'TimeoutError',
+      retryable: true,
+    });
   });
 
   it('handles timeout and health check fallback', async () => {
-    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' }, { retries: 0 });
+    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' });
     queueScenario({ timeout: true });
 
     const healthy = await client.checkHealth();

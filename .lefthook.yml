@@ -4,8 +4,7 @@
 pre-commit:
   commands:
     lint-and-format:
-      glob: "**/*.{js,mjs,json,md}"
-      run: npx lint-staged --verbose
+      run: npx lint-staged
       skip:
         - merge
         - rebase

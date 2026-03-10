@@ -42,37 +42,42 @@ describe('Worker', () => {
 
   it('emits processed callback on success', async () => {
     const { queue, apiClient, health } = createWorkerDeps();
-    apiClient.submitMessage.mockResolvedValue({ success: true, data: { ok: true } });
+    apiClient.submitMessage.mockResolvedValue({ ok: true });
 
     const worker = new Worker({ queue, apiClient, health });
     const cb = vi.fn();
     worker.on('messageProcessed', cb);
 
     const result = await worker._processMessage({ id: '1', data: { address: '123' } });
-    expect(result.success).toBe(true);
+    expect(result).toEqual({ ok: true });
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
   it('throws when API unhealthy', async () => {
     const { queue, apiClient, health } = createWorkerDeps();
-    apiClient.submitMessage.mockResolvedValue({ success: false, error: '500 error' });
+    apiClient.submitMessage.mockRejectedValue(new Error('500 error'));
     health.isHealthy = false;
 
     const worker = new Worker({ queue, apiClient, health });
     await expect(worker._processMessage({ id: '1', data: { address: '123' } })).rejects.toThrow('API unhealthy');
   });
 
-  it('returns soft failure for non-retryable 4xx and emits failed callback', async () => {
+  it('returns without throwing for non-retryable 4xx and emits failed callback', async () => {
     const { queue, apiClient, health } = createWorkerDeps();
-    apiClient.submitMessage.mockResolvedValue({ success: false, error: '404 not found' });
+    const clientError = new Error('404 not found');
+    clientError.name = 'ApiError';
+    clientError.statusCode = 404;
+    clientError.retryable = false;
+    apiClient.submitMessage.mockRejectedValue(clientError);
     const worker = new Worker({ queue, apiClient, health });
 
     const cb = vi.fn();
     worker.on('messageFailed', cb);
 
     const result = await worker._processMessage({ id: '1', data: { address: '123' } });
-    expect(result.failed).toBe(true);
+    expect(result).toBeUndefined();
     expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ retryable: false, statusCode: 404 }));
   });
 
   it('stops and closes queue', async () => {
@@ -85,23 +90,38 @@ describe('Worker', () => {
     expect(closeFn).toHaveBeenCalledTimes(1);
   });
 
-  it('throws authentication failures for retry policy handling', async () => {
+  it('returns without throwing for authentication failures (non-retryable)', async () => {
     const { queue, apiClient, health } = createWorkerDeps();
-    apiClient.submitMessage.mockResolvedValue({ success: false, error: '401 Unauthorized' });
+    const authError = new Error('401 Unauthorized');
+    authError.name = 'ApiError';
+    authError.statusCode = 401;
+    authError.retryable = false;
+    apiClient.submitMessage.mockRejectedValue(authError);
     const worker = new Worker({ queue, apiClient, health });
 
-    await expect(worker._processMessage({ id: '1', data: { address: '123' } })).rejects.toThrow(
-      'API Authentication failed - will not retry'
-    );
+    const cb = vi.fn();
+    worker.on('messageFailed', cb);
+
+    const result = await worker._processMessage({ id: '1', data: { address: '123' } });
+    expect(result).toBeUndefined();
+    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ retryable: false, statusCode: 401 }));
   });
 
-  it('throws server-side failures for queue retry', async () => {
+  it('throws server-side failures for BullMQ retry with exponential backoff', async () => {
     const { queue, apiClient, health } = createWorkerDeps();
-    apiClient.submitMessage.mockResolvedValue({ success: false, error: '500 Internal Server Error' });
+    const serverError = new Error('500 Internal Server Error');
+    serverError.name = 'ApiError';
+    serverError.statusCode = 500;
+    serverError.retryable = true;
+    apiClient.submitMessage.mockRejectedValue(serverError);
     const worker = new Worker({ queue, apiClient, health });
+
+    const cb = vi.fn();
+    worker.on('messageFailed', cb);
 
     await expect(worker._processMessage({ id: '1', data: { address: '123' } })).rejects.toThrow(
       '500 Internal Server Error'
     );
+    expect(cb).toHaveBeenCalledWith(expect.objectContaining({ retryable: true, statusCode: 500 }));
   });
 });

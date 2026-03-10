@@ -49,7 +49,7 @@ describe('ApiClient integration', () => {
   });
 
   it('submits a message successfully', async () => {
-    const client = new ApiClient({ url: baseUrl, apiKey: 'test-key' }, { retries: 0 });
+    const client = new ApiClient({ url: baseUrl, apiKey: 'test-key' });
 
     const result = await client.submitMessage({
       address: '12345',
@@ -58,13 +58,12 @@ describe('ApiClient integration', () => {
       source: 'integration-test',
     });
 
-    expect(result.success).toBe(true);
-    expect(result.data.accepted).toBe(true);
-    expect(result.data.address).toBe('12345');
+    expect(result.accepted).toBe(true);
+    expect(result.address).toBe('12345');
   });
 
   it('reports healthy endpoint correctly', async () => {
-    const client = new ApiClient({ url: baseUrl, apiKey: 'test-key' }, { retries: 0 });
+    const client = new ApiClient({ url: baseUrl, apiKey: 'test-key' });
     await expect(client.checkHealth()).resolves.toBe(true);
   });
 });
