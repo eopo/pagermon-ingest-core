@@ -305,7 +305,7 @@ import Message from '@pagermon/ingest-core/lib/message/Message.js';
 ### Required Fields
 
 | Field     | Type     | Description                             |
-| --------- | -------- | --------------------------------------- |
+|-----------|----------|-----------------------------------------|
 | `address` | `string` | Pager address/capcode                   |
 | `message` | `string` | Message body (required for `alpha`)     |
 | `format`  | `string` | `'alpha'` or `'numeric'`                |
@@ -314,7 +314,7 @@ import Message from '@pagermon/ingest-core/lib/message/Message.js';
 ### Optional Fields
 
 | Field       | Type     | Description              |
-| ----------- | -------- | ------------------------ |
+|-------------|----------|--------------------------|
 | `timestamp` | `number` | Unix timestamp (seconds) |
 | `time`      | `string` | ISO8601 datetime string  |
 
@@ -528,7 +528,7 @@ INGEST_CORE__REDIS_URL=redis://localhost:6379
 Your adapter receives core config automatically. You typically don't need to handle these.
 
 | Variable                                  | Required | Default              | Description                |
-| ----------------------------------------- | -------- | -------------------- | -------------------------- |
+|-------------------------------------------|----------|----------------------|----------------------------|
 | `INGEST_CORE__API_URL`                    | Yes      | _(none)_             | PagerMon server URL        |
 | `INGEST_CORE__API_KEY`                    | Yes      | _(none)_             | API key from PagerMon      |
 | `INGEST_CORE__LABEL`                      | No       | `pagermon-ingest`    | Source label for messages  |
