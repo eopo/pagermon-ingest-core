@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.4](https://github.com/eopo/pagermon-ingest-core/compare/v1.0.2...v1.0.4) (2026-03-10)
+
+
+### Miscellaneous Chores
+
+* prepare release ([53359d1](https://github.com/eopo/pagermon-ingest-core/commit/53359d1ab5356c1c8b1fc322b65e8d993e15c921))
+
 ## [1.0.2](https://github.com/eopo/pagermon-ingest-core/compare/v1.0.1...v1.0.2) (2026-03-10)
 
 
