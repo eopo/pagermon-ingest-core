@@ -114,6 +114,23 @@ Bootstrap mode lets adapter repos pass the adapter class directly and avoids pat
 Use loader mode when your container layout already provides `/app/adapter/adapter.js`.
 Use bootstrap mode when your adapter repo wants explicit startup control in code.
 
+## Logger Contract
+
+`ingest-core` passes a ready-to-use logger into adapter config as `config.logger`.
+
+- Use `config.logger` directly for adapter lifecycle logs.
+- Create scoped loggers in the adapter itself via `config.logger.child({...})`.
+- No extra logger helper is required in adapter config.
+
+For tests, use the central helper from core:
+
+```javascript
+import { createMockLogger } from '@pagermon/ingest-core/lib/runtime/logger.js';
+
+const logger = createMockLogger(vi); // spy-enabled methods
+// or: createMockLogger() for no-op methods
+```
+
 ## Development
 
 ```bash
@@ -160,6 +177,77 @@ INGEST_CORE__API_URL=http://pagermon:3000
 ```
 
 Where `pagermon` is the server service name.
+
+## Metrics & Observability
+
+Ingest supports optional Prometheus metrics collection for monitoring and observability.
+
+### Enabling Metrics
+
+To enable metrics, set:
+
+```bash
+INGEST_CORE__METRICS_ENABLED=true
+```
+
+Metrics will be exposed at `http://<host>:<port>/metrics` in Prometheus text format.
+
+### Configuration
+
+| Environment Variable                          | Default            | Description                                         |
+| --------------------------------------------- | ------------------ | --------------------------------------------------- |
+| `INGEST_CORE__METRICS_ENABLED`                | `false`            | Enable/disable metrics collection                   |
+| `INGEST_CORE__METRICS_PORT`                   | `9464`             | HTTP port for metrics endpoint                      |
+| `INGEST_CORE__METRICS_HOST`                   | `0.0.0.0`          | HTTP host for metrics endpoint                      |
+| `INGEST_CORE__METRICS_PATH`                   | `/metrics`         | HTTP path for metrics endpoint                      |
+| `INGEST_CORE__METRICS_PREFIX`                 | `pagermon_ingest_` | Prefix for all metrics                              |
+| `INGEST_CORE__METRICS_COLLECT_DEFAULT`        | `true`             | Collect Node.js default metrics (process, gc, etc.) |
+| `INGEST_CORE__METRICS_QUEUE_POLL_INTERVAL_MS` | `5000`             | Interval to poll queue depth for metrics            |
+| `INGEST_CORE__METRICS_DEFAULT_LABELS`         | (empty)            | CSV labels (e.g., `env=prod,region=eu`)             |
+
+### Available Metrics
+
+When enabled, the following metrics are automatically collected:
+
+**Messages**
+
+- `pagermon_ingest_messages_enqueued_total` – Total messages enqueued
+- `pagermon_ingest_messages_processed_total` – Total messages processed successfully
+- `pagermon_ingest_messages_failed_total` – Total message processing failures
+- `pagermon_ingest_message_process_duration_seconds` – Message processing duration (histogram)
+
+**Queue**
+
+- `pagermon_ingest_queue_depth` – Current queue depth (number of pending messages)
+
+**Health**
+
+- `pagermon_ingest_api_health_status` – API health (1=healthy, 0=unhealthy)
+- `pagermon_ingest_health_check_failures_total` – Total failed health checks
+
+**Adapter**
+
+- `pagermon_ingest_adapter_running` – Adapter status (1=running, 0=stopped)
+- `pagermon_ingest_last_message_timestamp_seconds` – Unix timestamp of last processed message
+
+**Optional (if enabled)**
+
+- Node.js process metrics (memory, CPU, GC, event loop, etc.)
+
+### Example Usage
+
+```bash
+# Enable metrics on default port
+INGEST_CORE__METRICS_ENABLED=true
+
+# Scrape with curl
+curl http://localhost:9464/metrics
+
+# Use with Prometheus (add to scrape_configs)
+- job_name: 'pagermon-ingest'
+  static_configs:
+    - targets: ['localhost:9464']
+```
 
 ## Developing Your Own Adapter
 

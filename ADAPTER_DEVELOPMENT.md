@@ -9,6 +9,72 @@ By the end, you'll understand:
 - Step-by-step implementation of a working adapter
 - Three deployment approaches (npm dependency, Docker base, bare metal)
 
+---
+
+## Table of Contents
+
+- [Adapter Development Guide](#adapter-development-guide)
+  - [Table of Contents](#table-of-contents)
+  - [What Is An Adapter?](#what-is-an-adapter)
+  - [Architecture Overview](#architecture-overview)
+  - [Getting Started](#getting-started)
+    - [Minimal Adapter Example](#minimal-adapter-example)
+    - [Step-by-Step: Build Your First Adapter](#step-by-step-build-your-first-adapter)
+      - [Step 1: Create Repository Structure](#step-1-create-repository-structure)
+      - [Step 2: Install Core Dependency](#step-2-install-core-dependency)
+      - [Step 3: Create Adapter Class](#step-3-create-adapter-class)
+      - [Step 4: Create Entrypoint](#step-4-create-entrypoint)
+      - [Step 5: Configure Environment](#step-5-configure-environment)
+      - [Step 6: Test Locally](#step-6-test-locally)
+  - [Adapter Concepts](#adapter-concepts)
+    - [The Adapter Contract](#the-adapter-contract)
+      - [`getName(): string`](#getname-string)
+      - [`start(onMessage, onClose, onError): void`](#startonmessage-onclose-onerror-void)
+      - [`stop(): void`](#stop-void)
+      - [`isRunning(): boolean`](#isrunning-boolean)
+    - [Lifecycle \& Error Handling](#lifecycle--error-handling)
+  - [Working with Messages](#working-with-messages)
+    - [Creating Messages](#creating-messages)
+      - [Import](#import)
+      - [Required Fields](#required-fields)
+      - [Optional Fields](#optional-fields)
+      - [Creating Messages](#creating-messages-1)
+    - [Message Requirements](#message-requirements)
+  - [Core Concepts for Adapters](#core-concepts-for-adapters)
+    - [Dependency Injection](#dependency-injection)
+    - [Logging Pattern](#logging-pattern)
+    - [Configuration Model](#configuration-model)
+  - [Testing Your Adapter](#testing-your-adapter)
+    - [Unit Tests](#unit-tests)
+    - [Integration Tests](#integration-tests)
+  - [Advanced Topics](#advanced-topics)
+    - [Child Process Management](#child-process-management)
+    - [Stream Processing](#stream-processing)
+    - [Polling with Backoff](#polling-with-backoff)
+  - [Repository \& Deployment Setup](#repository--deployment-setup)
+    - [Repository Layout](#repository-layout)
+    - [Deployment Options](#deployment-options)
+      - [Option 1: Custom Image with npm Dependency](#option-1-custom-image-with-npm-dependency)
+        - [Dockerfile](#dockerfile)
+        - [Build and Run](#build-and-run)
+        - [Full Stack with Compose](#full-stack-with-compose)
+      - [Option 2: Custom Image with Dockerfile Base](#option-2-custom-image-with-dockerfile-base)
+        - [Dockerfile](#dockerfile-1)
+      - [Option 3: Bare Metal with npm Dependency](#option-3-bare-metal-with-npm-dependency)
+        - [Setup](#setup)
+        - [Requirements](#requirements)
+        - [Running Redis Locally](#running-redis-locally)
+  - [Publishing Your Adapter](#publishing-your-adapter)
+    - [Docker Hub](#docker-hub)
+    - [GitHub Container Registry](#github-container-registry)
+    - [npm Package (Optional)](#npm-package-optional)
+  - [Configuration Reference](#configuration-reference)
+    - [Core Settings (`INGEST_CORE__*`)](#core-settings-ingest_core__)
+    - [Adapter Settings (`INGEST_ADAPTER__*`)](#adapter-settings-ingest_adapter__)
+  - [Getting Help](#getting-help)
+
+---
+
 ## What Is An Adapter?
 
 An adapter is a plugin that reads messages from a specific source and emits them to PagerMon.
@@ -66,32 +132,217 @@ This separation keeps source complexity isolated from shared runtime concerns.
                   └────────────────┘
 ```
 
-## Repository Split
+**Repository Split:**
 
-The ingest service consists of two repository
+The ingest service consists of two repositories:
 
 - **Core repo** (This repository): shared runtime, maintained by PagerMon team
 - **Your adapter repo**: source-specific logic, maintained by you
 
 Your adapter depends on the core via npm (`npm install @pagermon/ingest-core`) or by extending a Docker image.
 
-## Runtime Flow
+---
 
-Understanding the lifecycle helps you design your adapter correctly.
+## Getting Started
 
-### Startup Sequence
+### Minimal Adapter Example
 
-1. **User starts your container/process**
-2. **Your `index.js` calls `bootstrapWithAdapter(YourAdapter)`**
-3. **Core validates environment config** (`INGEST_CORE__*`)
-4. **Core initializes services:**
-   - API client
-   - Redis connection + queue
-   - Health monitor Reference
+If you are new to adapter development, start with the smallest valid adapter first.
 
-Your adapter must export a **default class or constructor** with these methods:
+```javascript
+import Message from '@pagermon/ingest-core/lib/message/Message.js';
 
-### Required Methods
+class MinimalAdapter {
+  constructor(config = {}) {
+    this.config = config;
+    this.logger = config.logger;
+    this.running = false;
+  }
+
+  getName() {
+    return 'minimal-adapter';
+  }
+
+  start(onMessage, onClose, onError) {
+    this.running = true;
+    this.logger.info('Adapter started');
+
+    try {
+      onMessage(
+        new Message({
+          address: '123456',
+          message: 'hello',
+          format: 'alpha',
+          source: 'minimal-adapter',
+        })
+      );
+    } catch (err) {
+      onError(err);
+    }
+  }
+
+  stop() {
+    this.running = false;
+    this.logger.info('Adapter stopped');
+  }
+
+  isRunning() {
+    return this.running;
+  }
+}
+
+export default MinimalAdapter;
+```
+
+### Step-by-Step: Build Your First Adapter
+
+Let's build a simple HTTP polling adapter that fetches messages from a REST API.
+
+#### Step 1: Create Repository Structure
+
+```bash
+mkdir my-pagermon-adapter
+cd my-pagermon-adapter
+npm init -y
+```
+
+#### Step 2: Install Core Dependency
+
+```bash
+npm install @pagermon/ingest-core
+```
+
+#### Step 3: Create Adapter Class
+
+Create `adapter/http-polling/adapter.js`:
+
+```javascript
+import Message from '@pagermon/ingest-core/lib/message/Message.js';
+
+class HttpPollingAdapter {
+  constructor(config = {}) {
+    const adapterConfig = config.adapter || {};
+    this.logger = config.logger;
+
+    // Validate required config
+    if (!adapterConfig.apiUrl) {
+      throw new Error('INGEST_ADAPTER__API_URL is required');
+    }
+
+    this.apiUrl = adapterConfig.apiUrl;
+    this.pollInterval = adapterConfig.pollInterval || 10000; // 10s default
+    this.intervalHandle = null;
+    this.running = false;
+  }
+
+  getName() {
+    return 'http-polling';
+  }
+
+  start(onMessage, onClose, onError) {
+    this.onMessage = onMessage;
+    this.onError = onError;
+    this.running = true;
+
+    this.logger.info(`Starting, polling ${this.apiUrl} every ${this.pollInterval}ms`);
+
+    this.intervalHandle = setInterval(() => {
+      this.poll();
+    }, this.pollInterval);
+
+    // Initial poll
+    this.poll();
+  }
+
+  async poll() {
+    if (!this.running) return;
+
+    try {
+      const response = await fetch(this.apiUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Assume API returns: { messages: [{address, text, format}] }
+      for (const item of data.messages || []) {
+        const message = new Message({
+          address: item.address,
+          message: item.text,
+          format: item.format || 'alpha',
+          source: 'http-polling',
+        });
+
+        this.onMessage(message);
+      }
+    } catch (err) {
+      this.onError(err);
+    }
+  }
+
+  stop() {
+    this.logger.info('Stopping');
+    this.running = false;
+
+    if (this.intervalHandle) {
+      clearInterval(this.intervalHandle);
+      this.intervalHandle = null;
+    }
+  }
+
+  isRunning() {
+    return this.running;
+  }
+}
+
+export default HttpPollingAdapter;
+```
+
+#### Step 4: Create Entrypoint
+
+Create `index.js`:
+
+```javascript
+import { bootstrapWithAdapter } from '@pagermon/ingest-core/bootstrap.js';
+import HttpPollingAdapter from './adapter/http-polling/adapter.js';
+
+bootstrapWithAdapter(HttpPollingAdapter);
+```
+
+#### Step 5: Configure Environment
+
+Create `.env.example`:
+
+```bash
+# Core settings
+INGEST_CORE__API_URL=http://pagermon:3000
+INGEST_CORE__API_KEY=your_api_key_here
+INGEST_CORE__REDIS_URL=redis://redis:6379
+INGEST_CORE__LABEL=http-polling-adapter
+
+# Adapter settings
+INGEST_ADAPTER__API_URL=https://example.com/api/messages
+INGEST_ADAPTER__POLL_INTERVAL=10000
+```
+
+#### Step 6: Test Locally
+
+```bash
+cp .env.example .env
+# Edit .env with real values
+node index.js
+```
+
+**That's it!** You now have a working adapter.
+
+---
+
+## Adapter Concepts
+
+### The Adapter Contract
+
+Your adapter must export a **default class or constructor function** that implements the following methods:
 
 #### `getName(): string`
 
@@ -105,7 +356,7 @@ getName() {
 
 #### `start(onMessage, onClose, onError): void`
 
-Start producing messages.
+Start producing messages. Called when the ingest service starts.
 
 **Parameters:**
 
@@ -148,161 +399,108 @@ start(onMessage, onClose, onError) {
 
 #### `stop(): void`
 
-Clean up all resources.
+Clean up all resources. Called when the ingest service shuts down.
 
-\*\*YStep-by-Step: Build Your First Adapter
+**Your responsibilities:**
 
-Let's build a simple HTTP polling adapter that fetches messages from a REST API.
-
-### Step 1: Create Repository Structure
-
-```bash
-mkdir my-pagermon-adapter
-cd my-pagermon-adapter
-npm init -y
-```
-
-### Step 2: Install Core Dependency
-
-```bash
-npm install @pagermon/ingest-core
-```
-
-### Step 3: Create Adapter Class
-
-Create `adapter/http-polling/adapter.js`:
+- Close connections
+- Stop streams
+- Kill child processes
+- Cancel timers
+- Remove event listeners
+- Release file handles
 
 ```javascript
-import Message from '@pagermon/ingest-core/lib/message/Message.js';
+stop() {
+  this.logger.info('Stopping');
+  this.running = false;
 
-class HttpPollingAdapter {
-  constructor(config = {}) {
-    const adapterConfig = config.adapter || {};
-
-    // Validate required config
-    if (!adapterConfig.apiUrl) {
-      throw new Error('INGEST_ADAPTER__API_URL is required');
-    }
-
-    this.apiUrl = adapterConfig.apiUrl;
-    this.pollInterval = adapterConfig.pollInterval || 10000; // 10s default
+  if (this.intervalHandle) {
+    clearInterval(this.intervalHandle);
     this.intervalHandle = null;
-    this.running = false;
   }
 
-  getName() {
-    return 'http-polling';
-  }
-
-  start(onMessage, onClose, onError) {
-    this.onMessage = onMessage;
-    this.onError = onError;
-    this.running = true;
-
-    console.log(`[HTTP-POLLING] Starting, polling ${this.apiUrl} every ${this.pollInterval}ms`);
-
-    this.intervalHandle = setInterval(() => {
-      this.poll();
-    }, this.pollInterval);
-
-    // Initial poll
-    this.poll();
-  }
-
-  async poll() {
-    if (!this.running) return;
-
-    try {
-      const response = await fetch(this.apiUrl);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      // Assume API returns: { messages: [{address, text, format}] }
-      for (const item of data.messages || []) {
-        const message = new Message({
-          address: item.address,
-          message: item.text,
-          format: item.format || 'alpha',
-          source: 'http-polling',
-        });
-
-        this.onMessage(message);
-      }
-    } catch (err) {
-      this.onError(err);
-    }
-  }
-
-  stop() {
-    console.log('[HTTP-POLLING] Stopping');
-    this.running = false;
-
-    if (this.intervalHandle) {
-      clearInterval(this.intervalHandle);
-      this.intervalHandle = null;
-    }
-  }
-
-  isRunning() {
-    return this.running;
+  if (this.socket) {
+    this.socket.destroy();
+    this.socket = null;
   }
 }
-
-export default HttpPollingAdapter;
 ```
 
-### Step 4: Create Entrypoint
+#### `isRunning(): boolean`
 
-Create `index.js`:
+Return the current adapter state.
 
 ```javascript
-import { bootstrapWithAdapter } from '@pagermon/ingest-core/bootstrap.js';
-import HttpPollingAdapter from './adapter/http-polling/adapter.js';
-
-bootstrapWithAdapter(HttpPollingAdapter);
+isRunning() {
+  return this.running;
+}
 ```
 
-### Step 5: Configure Environment
+### Lifecycle & Error Handling
 
-Create `.env.example`:
+**Startup Sequence:**
 
-```bash
-# Core settings
-INGEST_CORE__API_URL=http://pagermon:3000
-INGEST_CORE__API_KEY=your_api_key_here
-INGEST_CORE__REDIS_URL=redis://redis:6379
-INGEST_CORE__LABEL=http-polling-adapter
+1. **User starts your container/process**
+2. **Your `index.js` calls `bootstrapWithAdapter(YourAdapter)`**
+3. **Core validates environment config** (`INGEST_CORE__*`)
+4. **Core initializes services:**
+   - API client
+   - Redis connection + queue
+   - Health monitor
+5. **Core calls `adapter.start(onMessage, onClose, onError)`**
 
-# Adapter settings
-INGEST_ADAPTER__API_URL=https://example.com/api/messages
-INGEST_ADAPTER__POLL_INTERVAL=10000
+**When to call `onError()`:**
+
+- Transient source failures (network timeout, parse error)
+- Recoverable issues that do not terminate the stream
+- The adapter should remain running
+
+Example:
+
+```javascript
+this.source.on('error', (err) => {
+  if (err.code === 'ETIMEDOUT') {
+    // Transient, might recover
+    this.onError(err);
+  } else {
+    // Permanent failure
+    this.onClose();
+  }
+});
 ```
 
-### Step 6: Test Locally
+**When to call `onClose()`:**
 
-```bash
-cp .env.example .env
-# Edit .env with real values
-node index.js
-```
+- Source connection closes unexpectedly
+- Source signals end-of-stream
+- The adapter stream has permanently ended
 
-**That's it!** You now have a working adapter
+**Shutdown Sequence:**
 
-````
+1. Core calls `adapter.stop()`
+2. Your adapter closes connections, stops streams, kills child processes
+3. Core stops worker
+4. Core closes Redis connection
+5. Core exits gracefully
 
-### Constructor
+**Your responsibility:** Clean up resources in `stop()` so no memory leaks or orphaned processes occur.
+
+---
+
+## Working with Messages
+
+### Creating Messages
+
 Every message your adapter emits must be a valid `Message` object.
 
-### Import
+#### Import
 
 ```javascript
 import Message from '@pagermon/ingest-core/lib/message/Message.js';
-````
+```
 
-### Required Fields
+#### Required Fields
 
 | Field     | Type     | Description                             |
 | --------- | -------- | --------------------------------------- |
@@ -311,289 +509,138 @@ import Message from '@pagermon/ingest-core/lib/message/Message.js';
 | `format`  | `string` | `'alpha'` or `'numeric'`                |
 | `source`  | `string` | Your adapter name (core overrides this) |
 
-### Optional Fields
+#### Optional Fields
 
 | Field       | Type     | Description              |
 | ----------- | -------- | ------------------------ |
 | `timestamp` | `number` | Unix timestamp (seconds) |
 | `time`      | `string` | ISO8601 datetime string  |
 
-### Creating Messages
+#### Creating Messages
 
-````javascript
+```javascript
 // Alpha message
 const alphaMsg = new Message({
   address: '1234567',
   message: 'Emergency alert: Fire at Main St',
   format: 'alpha',
-  sDeployment Options
+  source: 'my-adapter',
+});
 
-You have three ways to deploy your adapter. Choose based on your environment and requirements.
-
----
-
-### Option 1: Custom Image with npm Dependency
-
-**Best for:** Production deployments, CI/CD pipelines
-
-Build a container image that installs your adapter and its dependencies.
-
-#### Dockerfile
-
-```dockerfile
-FROM node:24-slim
-
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies (includes @pagermon/ingest-core)
-RUN npm ci --only=production
-
-# Copy adapter code
-COPY . .
-
-# Run adapter entrypoint
-CMD ["node", "index.js"]
-````
-
-#### Build and Run
-
-```bash
-docker build -t my-org/pagermon-adapter-http:latest .
-
-docker run -d \
-  --name pagermon-ingest \
-  --env-file .env \
-  my-org/pagermon-adapter-http:latest
+// Numeric message
+const numericMsg = new Message({
+  address: '7654321',
+  message: '911',
+  format: 'numeric',
+  source: 'my-adapter',
+});
 ```
 
-#### Full Stack with Compose
+### Message Requirements
 
-`compose.yml`:
+Create and emit valid `Message` objects.
 
-```yaml
-services:
-  ingest:
-    image: my-org/pagermon-adapter-http:latest
-    restart: unless-stopped
-    env_file:
-      - stack.env
-    depends_on:
-      redis:
-        condition: service_healthy
+Minimum practical fields for PagerMon ingestion:
 
-  redis:
-    image: redis:8-alpine
-    restart: unless-stopped
-    command:
-      - redis-server
-      - --appendonly
-      - yes
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
+- `address`
+- `format` (`alpha` or `numeric`)
+- `source`
 
-volumes:
-  redis-data:
-```
+For `alpha`, provide a non-empty `message` string.
 
-Start stack:
+**Validation rules:**
 
-```bash
-docker compose up -d
-```
+- `address `must be non-empty string
+- `format` must be `'alpha'` or `'numeric'`
+- For `alpha`: `message` must be non-empty
+- For `numeric`: `message` is optional
 
----
+**Validation example:**
 
-### Option 2: Custom Image with Dockerfile Base
-
-**Best for:** Extending existing adapter images, reusing core image layers
-
-Derive from a published core image or another adapter.
-
-#### Dockerfile
-
-If a core base image existed:
-
-```dockerfile
-FROM shutterfire/pagermon-ingest-core:latest
-
-WORKDIR /app
-
-# Copy your adapter
-COPY adapter/ ./adapter/
-COPY index.js ./
-
-CMD ["node", "index.js"]
-```
-
-Or extend multimon adapter:
-
-```dockerfile
-FROM shutterfire/pagermon-ingest-multimon:latest
-
-# Add your custom overlay adapter
-COPY adapter/custom-overlay/ /opt/pagermon-adapter/
-
-# Override entrypoint if needed
-CMD ["node", "/app/index.js"]
-```
-
-**Note:** Currently, `@pagermon/ingest-core` does not publish a standalone base image. This option is most useful for:
-
-- Extending adapters (multimon → add custom parser)
-- Organizational base images
-
----
-
-### Option 3: Bare Metal with npm Dependency
-
-**Best for:** Development, testing, non-containerized environments
-
-Run directly on your host with Node.js installed.
-
-#### Setup
-
-```bash
-# Clone your adapter repo
-git clone https://github.com/you/my-adapter.git
-cd my-adapter
-
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.example .env
-nano .env
-
-# Start adapter
-npm start
-```
-
-`package.json` should include:
-
-```json
-{
-  "name": "my-pagermon-adapter",
-  "version": "1.0.0",
-  "type": "module",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js",
-    "test": "vitest run"
-  },
-  "dependencies": {
-    "@pagermon/ingest-core": "^1.0.0"
-  }
+```javascript
+const validation = message.validate();
+if (!validation.valid) {
+  console.error('Invalid message:', validation.errors);
+  return;
 }
 ```
 
-#### Requirements
-
-- Node.js >= 22.0.0
-- Redis server running locally or accessible via network
-- PagerMon server accessible
-
-#### Running Redis Locally
-
-```bash
-# macOS
-brew install redis
-brew services start redis
-
-# Ubuntu/Debian
-sudo apt install redis
-sudo systemctl start redis
-
-# Docker
-docker run -d -p 6379:6379 redis:8-alpine
-```
-
-Then set in `.env`:
-
-```bash
-INGEST_CORE__REDIS_URL=redis://localhost:6379
-```
-
 ---
 
-## Configuration Reference
+## Core Concepts for Adapters
 
-### Core Settings (`INGEST_CORE__*`)
+### Dependency Injection
 
-Your adapter receives core config automatically. You typically don't need to handle these.
+`ingest-core` injects runtime dependencies into your adapter `config`.
 
-| Variable                                  | Required | Default              | Description                |
-| ----------------------------------------- | -------- | -------------------- | -------------------------- |
-| `INGEST_CORE__API_URL`                    | Yes      | _(none)_             | PagerMon server URL        |
-| `INGEST_CORE__API_KEY`                    | Yes      | _(none)_             | API key from PagerMon      |
-| `INGEST_CORE__LABEL`                      | No       | `pagermon-ingest`    | Source label for messages  |
-| `INGEST_CORE__REDIS_URL`                  | No       | `redis://redis:6379` | Redis connection URL       |
-| `INGEST_CORE__ENABLE_DLQ`                 | No       | `true`               | Enable dead-letter queue   |
-| `INGEST_CORE__HEALTH_CHECK_INTERVAL`      | No       | `10000`              | Health check interval (ms) |
-| `INGEST_CORE__HEALTH_UNHEALTHY_THRESHOLD` | No       | `3`                  | Failures before unhealthy  |
+That means your adapter should use injected dependencies and should not create its own infrastructure layer.
 
-### Adapter Settings (`INGEST_ADAPTER__*`)
+Most important injected values:
 
-Define your adapter-specific settings. Core passes these to your constructor as `config.adapter`.
+- `config.adapter` - your adapter settings (`INGEST_ADAPTER__*`)
+- `config.logger` - ready-to-use logger (default for most adapters)
 
-**Naming convention:**
+**Why this helps:**
+
+- Less boilerplate for you
+- Same logging and runtime behavior in all adapters
+- Easier tests and easier maintenance
+
+### Logging Pattern
+
+Use the injected logger directly. This is the standard and usually enough:
+
+```javascript
+constructor(config = {}) {
+  this.config = config;
+  this.logger = config.logger;
+}
+```
+
+If you have sub-components, create child loggers directly from `config.logger`:
+
+```javascript
+this.decoderLogger = config.logger.child({ component: 'decoder' });
+this.receiverLogger = config.logger.child({ component: 'receiver' });
+```
+
+**Use levels consistently:**
+
+- `info` for lifecycle (start/stop/connect)
+- `debug` for noisy internals
+- `warn` for recoverable issues
+- `error` for hard failures
+
+### Configuration Model
+
+Core config keys use `INGEST_CORE__*`.
+
+Adapter config keys use `INGEST_ADAPTER__*` and are passed to adapters as:
+
+- `this.config.adapter` (structured object)
+- `this.config.rawEnv` (raw env map)
+
+**Example env:**
 
 ```bash
-INGEST_ADAPTER__<KEY>=<value>
-INGEST_ADAPTER__<NAMESPACE>__<KEY>=<value>
+INGEST_CORE__API_KEY=your_api_key
+INGEST_ADAPTER__FREQUENCIES=163000000
+INGEST_ADAPTER__PROTOCOLS=POCSAG512
+INGEST_ADAPTER__SMTP__HOST=smtp.example.org
 ```
 
-**Mapping to config object:**
+**In adapter code:**
 
-```bash
-# Flat
-INGEST_ADAPTER__API_URL=http://example.com
-→ config.adapter.apiUrl
-
-# Nested
-INGEST_ADAPTER__SMTP__HOST=smtp.example.com
-INGEST_ADAPTER__SMTP__PORT=587
-→ config.adapter.smtp.host
-→ config.adapter.smtp.port
+```javascript
+const adapterConfig = this.config.adapter || {};
+const smtp = adapterConfig.smtp || {};
 ```
 
-**Best practices:**
+**Recommended approach:**
 
-- Document all adapter settings in your README
-- Provide `.env.example` with comments
-- Validate required settings in constructor
-- Use sensible defaults for optional settings
-
----
-
-## Repository Layout
-
-Recommended structure for adapter repositories:
-
-```text
-my-pagermon-adapter/
-├── adapter/
-│   └── my-adapter/
-│       ├── adapter.js          # Main adapter class
-│       ├── parser.js           # Optional: parsing logic
-│       └── client.js           # Optional: source client
-├── test/
-│   ├── unit/
-│   │   └── adapter.test.js     # Unit tests
-│   └── integration/
-│       └── e2e.test.js         # Integration tests
-├── .env.example                # Example configuration
-├── compose.yml                 # Docker Compose stack
-├── Dockerfile                  # Container build
-├── index.js                    # Entrypoint (bootstrap call)
-├── package.json                # Dependencies
-└── README.md                   # User documentation
-```
+- Read all adapter-specific settings from `this.config.adapter`.
+- Keep `this.config.rawEnv` only as fallback/debug aid.
+- Validate required adapter settings early (constructor or startup).
 
 ---
 
@@ -608,16 +655,22 @@ Test adapter logic in isolation using mocks.
 ```javascript
 import { describe, expect, it, vi } from 'vitest';
 import HttpPollingAdapter from '../../adapter/http-polling/adapter.js';
+import { createMockLogger } from '@pagermon/ingest-core/lib/runtime/logger.js';
 
 describe('HttpPollingAdapter', () => {
   it('validates required config', () => {
     expect(() => {
-      new HttpPollingAdapter({});
+      new HttpPollingAdapter({
+        logger: createMockLogger(vi, { component: 'adapter-test' }),
+      });
     }).toThrow('INGEST_ADAPTER__API_URL is required');
   });
 
   it('starts polling and emits messages', async () => {
+    const testLogger = createMockLogger(vi, { component: 'adapter-test' });
+
     const adapter = new HttpPollingAdapter({
+      logger: testLogger,
       adapter: {
         apiUrl: 'http://test.local/api',
         pollInterval: 100,
@@ -634,19 +687,34 @@ describe('HttpPollingAdapter', () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     expect(onMessage).toHaveBeenCalled();
+    expect(testLogger.info).toHaveBeenCalled(); // should be called
 
     adapter.stop();
+    expect(testLogger.info).toHaveBeenCalledWith('Stopping'); // should be called
+  });
+
+  it('creates scoped child logger in adapter components', () => {
+    const testLogger = createMockLogger(vi, { component: 'adapter-test' });
+    const child = testLogger.child({ component: 'decoder' });
+
+    child.debug('decoder started');
+    expect(child.debug).toHaveBeenCalledWith('decoder started'); // should be called
   });
 });
 ```
+
+If you want to assert log behavior, always pass `vi` into `createMockLogger(vi, ...)` so methods are spies.
 
 ### Integration Tests
 
 Test your adapter with real dependencies if possible.
 
 ```javascript
+import { createMockLogger } from '@pagermon/ingest-core/lib/runtime/logger.js';
+
 it('fetches messages from live API', async () => {
   const adapter = new HttpPollingAdapter({
+    logger: createMockLogger(),
     adapter: {
       apiUrl: process.env.TEST_API_URL,
     },
@@ -781,6 +849,221 @@ class SmartPollingAdapter {
 
 ---
 
+## Repository & Deployment Setup
+
+### Repository Layout
+
+Recommended structure for adapter repositories:
+
+```text
+my-pagermon-adapter/
+├── adapter/
+│   └── my-adapter/
+│       ├── adapter.js          # Main adapter class
+│       ├── parser.js           # Optional: parsing logic
+│       └── client.js           # Optional: source client
+├── test/
+│   ├── unit/
+│   │   └── adapter.test.js     # Unit tests
+│   └── integration/
+│       └── e2e.test.js         # Integration tests
+├── .env.example                # Example configuration
+├── compose.yml                 # Docker Compose stack
+├── Dockerfile                  # Container build
+├── index.js                    # Entrypoint (bootstrap call)
+├── package.json                # Dependencies
+└── README.md                   # User documentation
+```
+
+### Deployment Options
+
+You have three ways to deploy your adapter. Choose based on your environment and requirements.
+
+#### Option 1: Custom Image with npm Dependency
+
+**Best for:** Production deployments, CI/CD pipelines
+
+Build a container image that installs your adapter and its dependencies.
+
+##### Dockerfile
+
+```dockerfile
+FROM node:24-slim
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies (includes @pagermon/ingest-core)
+RUN npm ci --only=production
+
+# Copy adapter code
+COPY . .
+
+# Run adapter entrypoint
+CMD ["node", "index.js"]
+```
+
+##### Build and Run
+
+```bash
+docker build -t my-org/pagermon-adapter-http:latest .
+
+docker run -d \
+  --name pagermon-ingest \
+  --env-file .env \
+  my-org/pagermon-adapter-http:latest
+```
+
+##### Full Stack with Compose
+
+`compose.yml`:
+
+```yaml
+services:
+  ingest:
+    image: my-org/pagermon-adapter-http:latest
+    restart: unless-stopped
+    env_file:
+      - stack.env
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+
+volumes:
+  redis-data:
+```
+
+Start stack:
+
+```bash
+docker compose up -d
+```
+
+#### Option 2: Custom Image with Dockerfile Base
+
+**Best for:** Extending existing adapter images, reusing core image layers
+
+Derive from a published core image or another adapter.
+
+##### Dockerfile
+
+If a core base image existed:
+
+```dockerfile
+FROM shutterfire/pagermon-ingest-core:latest
+
+WORKDIR /app
+
+# Copy your adapter
+COPY adapter/ ./adapter/
+COPY index.js ./
+
+CMD ["node", "index.js"]
+```
+
+Or extend multimon adapter:
+
+```dockerfile
+FROM shutterfire/pagermon-ingest-multimon:latest
+
+# Add your custom overlay adapter
+COPY adapter/custom-overlay/ /opt/pagermon-adapter/
+
+# Override entrypoint if needed
+CMD ["node", "/app/index.js"]
+```
+
+**Note:** Currently, `@pagermon/ingest-core` does not publish a standalone base image. This option is most useful for:
+
+- Extending adapters (multimon → add custom parser)
+- Organizational base images
+
+#### Option 3: Bare Metal with npm Dependency
+
+**Best for:** Development, testing, non-containerized environments
+
+Run directly on your host with Node.js installed.
+
+##### Setup
+
+```bash
+# Clone your adapter repo
+git clone https://github.com/you/my-adapter.git
+cd my-adapter
+
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.example .env
+nano .env
+
+# Start adapter
+npm start
+```
+
+`package.json` should include:
+
+```json
+{
+  "name": "my-pagermon-adapter",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@pagermon/ingest-core": "^1.0.0"
+  }
+}
+```
+
+##### Requirements
+
+- Node.js >= 22.0.0
+- Redis server running locally or accessible via network
+- PagerMon server accessible
+
+##### Running Redis Locally
+
+```bash
+# macOS
+brew install redis
+brew services start redis
+
+# Ubuntu/Debian
+sudo apt install redis
+sudo systemctl start redis
+
+# Docker
+docker run -d -p 6379:6379 redis:8-alpine
+```
+
+Then set in `.env`:
+
+```bash
+INGEST_CORE__REDIS_URL=redis://localhost:6379
+```
+
+---
+
 ## Publishing Your Adapter
 
 ### Docker Hub
@@ -823,10 +1106,59 @@ npm install your-adapter-package
 
 ---
 
+## Configuration Reference
+
+### Core Settings (`INGEST_CORE__*`)
+
+Your adapter receives core config automatically. You typically don't need to handle these.
+
+| Variable                                  | Required | Default              | Description                |
+| ----------------------------------------- | -------- | -------------------- | -------------------------- |
+| `INGEST_CORE__API_URL`                    | Yes      | _(none)_             | PagerMon server URL        |
+| `INGEST_CORE__API_KEY`                    | Yes      | _(none)_             | API key from PagerMon      |
+| `INGEST_CORE__LABEL`                      | No       | `pagermon-ingest`    | Source label for messages  |
+| `INGEST_CORE__REDIS_URL`                  | No       | `redis://redis:6379` | Redis connection URL       |
+| `INGEST_CORE__ENABLE_DLQ`                 | No       | `true`               | Enable dead-letter queue   |
+| `INGEST_CORE__HEALTH_CHECK_INTERVAL`      | No       | `10000`              | Health check interval (ms) |
+| `INGEST_CORE__HEALTH_UNHEALTHY_THRESHOLD` | No       | `3`                  | Failures before unhealthy  |
+
+### Adapter Settings (`INGEST_ADAPTER__*`)
+
+Define your adapter-specific settings. Core passes these to your constructor as `config.adapter`.
+
+**Naming convention:**
+
+```bash
+INGEST_ADAPTER__<KEY>=<value>
+INGEST_ADAPTER__<NAMESPACE>__<KEY>=<value>
+```
+
+**Mapping to config object:**
+
+```bash
+# Flat
+INGEST_ADAPTER__API_URL=http://example.com
+→ config.adapter.apiUrl
+
+# Nested
+INGEST_ADAPTER__SMTP__HOST=smtp.example.com
+INGEST_ADAPTER__SMTP__PORT=587
+→ config.adapter.smtp.host
+→ config.adapter.smtp.port
+```
+
+**Best practices:**
+
+- Document all adapter settings in your README
+- Provide `.env.example` with comments
+- Validate required settings in constructor
+- Use sensible defaults for optional settings
+
+---
+
 ## Getting Help
 
 - **Core issues**: [eopo/ingest-core](https://github.com/eopo/ingest-core/issues)
-- **Multimon adapter**: [eopo/ingest-adapter-multimon](https://github.com/eopo/ingest-adapter-multimon/issues)
 - **Community**: PagerMon Discord/Slack
 
 When asking for help, include:
@@ -835,164 +1167,3 @@ When asking for help, include:
 - Deployment method (Docker, bare metal)
 - Relevant logs
 - Configuration (redact sensitive values)
-  console.error('Invalid message:', err.message);
-  }
-
-````
-
-Validation rules:
-
-- `address` must be non-empty string
-- `format` must be `'alpha'` or `'numeric'`
-- For `alpha`: `message` must be non-empty
-- For `numeric`: `message` is optionalnrecoverable initialization errors
-
-**When to call `onError()`:**
-
-- Transient source failures (network timeout, parse error)
-- Recoverable issues that don't terminate the stream
-
-**When to call `onClose()`:**
-
-- Source connection closes unexpectedly
-- Source signals end-of-stream
-
-**Example:**
-
-```javascript
-this.source.on('error', (err) => {
-  if (err.code === 'ETIMEDOUT') {
-    // Transient, might recover
-    this.onError(err);
-  } else {
-    // Permanent failure
-    this.onClose();
-  }
-});
-````
-
-1. Core calls `adapter.stop()`
-2. Your adapter closes connections, stops streams, kills child processes
-3. Core stops worker
-4. Core closes Redis connection
-5. Core exits gracefully
-
-**Your responsibility:** Clean up resources in `stop()` so no leaks occur.
-
-## Adapter Contract
-
-Your adapter must export a default class or constructor function that creates an object implementing:
-
-Required methods:
-
-- `getName()`
-- `start(onMessage, onClose, onError)`
-- `stop()`
-- `isRunning()`
-
-Emit `Message` objects from:
-
-- `@pagermon/ingest-core/lib/message/Message.js`
-
-Contract semantics:
-
-- `getName()` should return a stable identifier for logging/diagnostics.
-- `start(...)` should allocate resources and begin producing messages.
-- `stop()` must clean up timers, sockets, streams, child processes, and listeners.
-- `isRunning()` should reflect actual adapter state, not only a static flag.
-
-Error handling expectations:
-
-- Call `onError(err)` for recoverable or stream-level failures.
-- Call `onClose()` when the message stream ends unexpectedly.
-- Throw from constructor for invalid mandatory adapter config.
-
-## Configuration Model
-
-Core config keys use `INGEST_CORE__*`.
-
-Adapter config keys use `INGEST_ADAPTER__*` and are passed to adapters as:
-
-- `this.config.adapter` (structured object)
-- `this.config.rawEnv` (raw env map)
-
-Example env:
-
-```bash
-INGEST_CORE__API_KEY=your_api_key
-INGEST_ADAPTER__FREQUENCIES=163000000
-INGEST_ADAPTER__PROTOCOLS=POCSAG512
-INGEST_ADAPTER__SMTP__HOST=smtp.example.org
-```
-
-In adapter code:
-
-```javascript
-const adapterConfig = this.config.adapter || {};
-const smtp = adapterConfig.smtp || {};
-```
-
-Recommended approach:
-
-- Read all adapter-specific settings from `this.config.adapter`.
-- Keep `this.config.rawEnv` only as fallback/debug aid.
-- Validate required adapter settings early (constructor or startup).
-
-## Message Requirements
-
-Create and emit valid `Message` objects.
-
-Minimum practical fields for PagerMon ingestion:
-
-- `address`
-- `format` (`alpha` or `numeric`)
-- `source`
-
-For `alpha`, provide a non-empty `message` string.
-
-Example:
-
-```javascript
-import Message from '@pagermon/ingest-core/lib/message/Message.js';
-
-onMessage(
-  new Message({
-    address: '123456',
-    message: 'Test page',
-    format: 'alpha',
-    source: 'my-adapter',
-  })
-);
-```
-
-## Minimal Adapter Repo Layout
-
-```text
-adapter-repo/
-  index.js
-  Dockerfile
-  package.json
-  adapter/
-    <your-adapter>/
-  test/
-    unit/
-    integration/
-```
-
-Suggested files:
-
-- `index.js`: bootstrap entry
-- `adapter/<name>/adapter.js`: adapter class
-- optional helper modules (parsers, transport clients, subprocess wrappers)
-- adapter-owned tests (unit + integration)
-
-## Testing Guidance
-
-Adapter repos should own adapter-specific tests, especially:
-
-- parser/normalization unit tests
-- startup/shutdown lifecycle tests
-- failure-path tests (`onError`, `onClose`)
-- hardware/source integration tests where applicable
-
-Core repository tests only validate core runtime behavior and adapter contract loading.

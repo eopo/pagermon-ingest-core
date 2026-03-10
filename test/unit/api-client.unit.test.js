@@ -74,7 +74,7 @@ describe('ApiClient unit behavior', () => {
 
   it('submits payload successfully and returns API response', async () => {
     const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' });
-    queueScenario({ statusCode: 200, data: '{"accepted":true}' });
+    queueScenario({ statusCode: 200, data: '{"status":"ok","id":42,"reason":"created"}' });
 
     const result = await client.submitMessage({
       toPayload() {
@@ -82,7 +82,7 @@ describe('ApiClient unit behavior', () => {
       },
     });
 
-    expect(result).toEqual({ accepted: true });
+    expect(result).toEqual({ status: 'ok', id: 42, reason: 'created' });
     expect(httpRequestMock).toHaveBeenCalledTimes(1);
   });
 
