@@ -420,7 +420,7 @@ Derive from a published core image or another adapter.
 If a core base image existed:
 
 ```dockerfile
-FROM shutterfire/ingest-core:latest
+FROM shutterfire/pagermon-ingest-core:latest
 
 WORKDIR /app
 

@@ -122,7 +122,7 @@ npm test
 Build core image:
 
 ```bash
-docker build -t shutterfire/ingest-core:latest .
+docker build -t shutterfire/pagermon-ingest-core:latest .
 ```
 
 ## Using Ingest with PagerMon Server
