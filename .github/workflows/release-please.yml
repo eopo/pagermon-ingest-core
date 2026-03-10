@@ -5,6 +5,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      release_as:
+        description: 'Force release version (e.g., 1.2.3)'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -21,6 +26,8 @@ jobs:
         id: release
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          target-branch: main
+          release-as: ${{ github.event.inputs.release_as }}
       
       - name: Trigger adapter rebuild
         if: steps.release.outputs.release_created

@@ -7,7 +7,7 @@ updates:
     target-branch: "dev"
     open-pull-requests-limit: 10
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "fix(deps)"
     labels:
       - "dependencies"
       - "dependabot"
@@ -19,7 +19,7 @@ updates:
     target-branch: "dev"
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "chore(docker)"
+      prefix: "fix(deps)"
     labels:
       - "dependencies"
       - "dependabot"
@@ -31,7 +31,7 @@ updates:
     target-branch: "dev"
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "chore(ci)"
+      prefix: "fix(deps)"
     labels:
       - "dependencies"
       - "dependabot"
