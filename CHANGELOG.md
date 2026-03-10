@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/eopo/pagermon-ingest-core/compare/v1.0.5...v1.1.0) (2026-03-10)
+
+
+### Features
+
+* add adapter rebuild trigger to release workflow ([b916bfe](https://github.com/eopo/pagermon-ingest-core/commit/b916bfe491208144f07b5b033e2e910b6d61bf67))
+
+
+### Bug Fixes
+
+* enhance 'no-unused-vars' rule configuration in ESLint ([f6f1a69](https://github.com/eopo/pagermon-ingest-core/commit/f6f1a69feaf785e164d90d61b0171c70e1dd496f))
+
 ## [1.0.5](https://github.com/eopo/pagermon-ingest-core/compare/v1.0.4...v1.0.5) (2026-03-10)
 
 
