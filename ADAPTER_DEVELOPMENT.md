@@ -46,6 +46,8 @@ This guide is the implementation reference for building a custom PagerMon ingest
     - [Bare Metal](#bare-metal)
   - [Publishing Your Adapter](#publishing-your-adapter)
   - [Configuration Reference](#configuration-reference)
+    - [Core Variables](#core-variables)
+    - [Adapter Variables](#adapter-variables)
   - [Release Checklist](#release-checklist)
   - [Getting Help](#getting-help)
 
