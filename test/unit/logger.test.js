@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createMockLogger } from '../../lib/runtime/logger.js';
+import { createMockLogger } from '../helpers/logger.js';
 
 describe('runtime logger helpers', () => {
   it('creates a mock logger with pino-like API', () => {

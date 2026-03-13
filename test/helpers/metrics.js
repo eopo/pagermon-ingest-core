@@ -23,7 +23,7 @@ function makeMetricInstance() {
   return m;
 }
 
-export function makeMetrics() {
+export function createMockMetrics() {
   return {
     counter: vi.fn(() => makeMetricInstance()),
     gauge: vi.fn(() => makeMetricInstance()),

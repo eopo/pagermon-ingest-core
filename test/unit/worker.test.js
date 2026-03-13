@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import Worker from '../../lib/core/Worker.js';
-import { makeMetrics } from '../helpers/metrics.js';
+import { createMockMetrics } from '../helpers/metrics.js';
 
 function createWorkerDeps() {
   const startProcessing = vi.fn();
@@ -21,7 +21,7 @@ function createWorkerDeps() {
     isHealthy: true,
   };
 
-  return { queue, apiClient, health, metrics: makeMetrics(), startProcessing, closeFn };
+  return { queue, apiClient, health, metrics: createMockMetrics(), startProcessing, closeFn };
 }
 
 describe('Worker', () => {

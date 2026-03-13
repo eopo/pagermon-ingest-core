@@ -23,8 +23,6 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
@@ -32,30 +30,3 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           target-branch: main
           release-as: ${{ github.event.inputs.release_as }}
-
-  sync-dev:
-    name: Sync main into dev
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [release-please]
-    if: needs.release-please.outputs.release_created == 'true'
-    steps:
-      - name: Checkout dev
-        uses: actions/checkout@v5
-        with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-          ref: dev
-          fetch-depth: 0
-
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Merge main into dev
-        run: |
-          set -euo pipefail
-          git fetch origin main dev
-          git checkout dev
-          git merge --no-ff origin/main -m "chore: sync main into dev after release"
-          git push origin HEAD:dev
