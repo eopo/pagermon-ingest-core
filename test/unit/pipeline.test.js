@@ -9,7 +9,7 @@ vi.mock('../../lib/runtime/adapter-loader.js', () => ({
 }));
 
 import Orchestrator from '../../lib/runtime/pipeline.js';
-import { makeMetrics } from '../helpers/metrics.js';
+import { createMockMetrics } from '../helpers/metrics.js';
 
 describe('Orchestrator', () => {
   beforeEach(() => {
@@ -28,7 +28,7 @@ describe('Orchestrator', () => {
     const adapter = { getName: () => 'fake', isRunning: () => true };
     createAdapterMock.mockResolvedValue(adapter);
 
-    const orchestrator = new Orchestrator({ adapter: { foo: 'bar' }, metrics: makeMetrics() });
+    const orchestrator = new Orchestrator({ adapter: { foo: 'bar' }, metrics: createMockMetrics() });
     await orchestrator.initialize();
 
     expect(createAdapterMock).toHaveBeenCalledWith({ foo: 'bar' });
@@ -45,7 +45,7 @@ describe('Orchestrator', () => {
     };
     createAdapterMock.mockResolvedValue(adapter);
 
-    const metrics = makeMetrics();
+    const metrics = createMockMetrics();
     const orchestrator = new Orchestrator({ adapter: { foo: 'bar' }, metrics });
     const adapterUpGauge = metrics.gauge.mock.results[0].value;
     await orchestrator.initialize();

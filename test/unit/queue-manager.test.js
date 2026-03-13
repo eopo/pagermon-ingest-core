@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMockLogger } from '../../lib/runtime/logger.js';
+import { createMockLogger, createMockMetrics } from '../helpers/index.js';
 
 const queueInstances = [];
 const workerInstances = [];
@@ -59,7 +59,6 @@ vi.mock('ioredis', () => {
 });
 
 import QueueManager from '../../lib/core/QueueManager.js';
-import { makeMetrics } from '../helpers/metrics.js';
 
 describe('QueueManager', () => {
   beforeEach(() => {
@@ -79,7 +78,7 @@ describe('QueueManager', () => {
   });
 
   it('initializes queue and dlq with defaults', () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
     manager.initialize();
 
     expect(redisInstances).toHaveLength(1);
@@ -89,7 +88,7 @@ describe('QueueManager', () => {
   });
 
   it('adds message with Message-like payload and builds deterministic job id', async () => {
-    const metrics = makeMetrics();
+    const metrics = createMockMetrics();
     const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { queueName: 'test-q', metrics });
     manager.initialize();
     const enqueuedCounter = metrics.counter.mock.results[0].value;
@@ -106,14 +105,14 @@ describe('QueueManager', () => {
   });
 
   it('throws when adding before initialize', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
     await expect(manager.addMessage({})).rejects.toThrow('Queue not initialized');
   });
 
   it('returns empty dead letters when DLQ disabled', async () => {
     const manager = new QueueManager(
       { redisUrl: 'redis://localhost:6379' },
-      { enableDLQ: false, metrics: makeMetrics() }
+      { enableDLQ: false, metrics: createMockMetrics() }
     );
     manager.initialize();
 
@@ -122,7 +121,7 @@ describe('QueueManager', () => {
   });
 
   it('maps dead letter jobs with limit handling', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
     manager.initialize();
 
     queueInstances[1].getJobs.mockResolvedValue([
@@ -147,7 +146,7 @@ describe('QueueManager', () => {
   });
 
   it('returns queue size 0 when queue is not initialized', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
     await expect(manager.getQueueSize()).resolves.toBe(0);
   });
 
@@ -158,7 +157,7 @@ describe('QueueManager', () => {
       { redisUrl: 'redis://localhost:6379' },
       {
         logger: mockLogger,
-        metrics: makeMetrics(),
+        metrics: createMockMetrics(),
       }
     );
 
@@ -177,7 +176,7 @@ describe('QueueManager', () => {
   });
 
   it('closes worker, queues and redis connections', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: makeMetrics() });
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
     manager.initialize();
     manager.startProcessing(() => Promise.resolve({ ok: true }));
 

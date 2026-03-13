@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import HealthMonitor from '../../lib/core/HealthMonitor.js';
-import { makeMetrics } from '../helpers/metrics.js';
+import { createMockMetrics } from '../helpers/metrics.js';
 
 describe('HealthMonitor', () => {
   it('throws when apiClient is missing', () => {
@@ -13,7 +13,7 @@ describe('HealthMonitor', () => {
 
   it('marks unhealthy after threshold and emits callbacks', async () => {
     const apiClient = { checkHealth: vi.fn().mockResolvedValue(false) };
-    const metrics = makeMetrics();
+    const metrics = createMockMetrics();
     const monitor = new HealthMonitor({ apiClient }, { unhealthyThreshold: 2, metrics });
     const healthGauge = metrics.gauge.mock.results[0].value;
     const failureCounter = metrics.counter.mock.results[0].value;
@@ -39,7 +39,7 @@ describe('HealthMonitor', () => {
 
   it('recovers to healthy state after successful check', async () => {
     const apiClient = { checkHealth: vi.fn() };
-    const monitor = new HealthMonitor({ apiClient }, { unhealthyThreshold: 1, metrics: makeMetrics() });
+    const monitor = new HealthMonitor({ apiClient }, { unhealthyThreshold: 1, metrics: createMockMetrics() });
 
     apiClient.checkHealth.mockResolvedValueOnce(false);
     await monitor.perform();
@@ -53,7 +53,7 @@ describe('HealthMonitor', () => {
 
   it('handles check exceptions as failures', async () => {
     const apiClient = { checkHealth: vi.fn().mockRejectedValue(new Error('boom')) };
-    const metrics = makeMetrics();
+    const metrics = createMockMetrics();
     const monitor = new HealthMonitor({ apiClient }, { unhealthyThreshold: 1, metrics });
     const failureCounter = metrics.counter.mock.results[0].value;
 
@@ -66,7 +66,7 @@ describe('HealthMonitor', () => {
   it('starts interval polling and can be stopped safely', () => {
     vi.useFakeTimers();
     const apiClient = { checkHealth: vi.fn().mockResolvedValue(true) };
-    const monitor = new HealthMonitor({ apiClient }, { checkInterval: 50, metrics: makeMetrics() });
+    const monitor = new HealthMonitor({ apiClient }, { checkInterval: 50, metrics: createMockMetrics() });
 
     const performSpy = vi.spyOn(monitor, 'perform').mockResolvedValue(undefined);
 
@@ -84,7 +84,7 @@ describe('HealthMonitor', () => {
 
   it('ignores unknown callback events and exposes status snapshot', async () => {
     const apiClient = { checkHealth: vi.fn().mockResolvedValue(true) };
-    const monitor = new HealthMonitor({ apiClient }, { metrics: makeMetrics() });
+    const monitor = new HealthMonitor({ apiClient }, { metrics: createMockMetrics() });
 
     monitor.on('unknown', vi.fn());
     await monitor.perform();

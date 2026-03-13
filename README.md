@@ -114,22 +114,12 @@ Bootstrap mode lets adapter repos pass the adapter class directly and avoids pat
 Use loader mode when your container layout already provides `/app/adapter/adapter.js`.
 Use bootstrap mode when your adapter repo wants explicit startup control in code.
 
-## Logger Contract
+## Adapter Developer Docs
 
-`ingest-core` passes a ready-to-use logger into adapter config as `config.logger`.
+This README intentionally stays high-level for runtime and operations.
 
-- Use `config.logger` directly for adapter lifecycle logs.
-- Create scoped loggers in the adapter itself via `config.logger.child({...})`.
-- No extra logger helper is required in adapter config.
-
-For tests, use the central helper from core:
-
-```javascript
-import { createMockLogger } from '@pagermon/ingest-core/lib/runtime/logger.js';
-
-const logger = createMockLogger(vi); // spy-enabled methods
-// or: createMockLogger() for no-op methods
-```
+If you are building a custom adapter, use [ADAPTER_DEVELOPMENT.md](./ADAPTER_DEVELOPMENT.md) as the primary source.
+It contains the full contract, end-to-end implementation flow, test patterns, metrics guidance, and deployment options.
 
 ## Development
 
@@ -192,6 +182,9 @@ Where `pagermon` is the server service name.
 
 Ingest supports optional Prometheus metrics collection for monitoring and observability.
 
+Metrics are registered through the shared runtime and, when enabled, exposed via an HTTP endpoint.
+Custom adapters can also register their own counters, gauges, and histograms through the injected `config.metrics` object.
+
 ### Enabling Metrics
 
 To enable metrics, set:
@@ -204,45 +197,56 @@ Metrics will be exposed at `http://<host>:<port>/metrics` in Prometheus text for
 
 ### Configuration
 
-| Environment Variable                          | Default            | Description                                         |
-| --------------------------------------------- | ------------------ | --------------------------------------------------- |
-| `INGEST_CORE__METRICS_ENABLED`                | `false`            | Enable/disable metrics collection                   |
-| `INGEST_CORE__METRICS_PORT`                   | `9464`             | HTTP port for metrics endpoint                      |
-| `INGEST_CORE__METRICS_HOST`                   | `0.0.0.0`          | HTTP host for metrics endpoint                      |
-| `INGEST_CORE__METRICS_PATH`                   | `/metrics`         | HTTP path for metrics endpoint                      |
-| `INGEST_CORE__METRICS_PREFIX`                 | `pagermon_ingest_` | Prefix for all metrics                              |
-| `INGEST_CORE__METRICS_COLLECT_DEFAULT`        | `true`             | Collect Node.js default metrics (process, gc, etc.) |
-| `INGEST_CORE__METRICS_QUEUE_POLL_INTERVAL_MS` | `5000`             | Interval to poll queue depth for metrics            |
-| `INGEST_CORE__METRICS_DEFAULT_LABELS`         | (empty)            | CSV labels (e.g., `env=prod,region=eu`)             |
+| Environment Variable                   | Default            | Description                                                       |
+| -------------------------------------- | ------------------ | ----------------------------------------------------------------- |
+| `INGEST_CORE__METRICS_ENABLED`         | `false`            | Enable/disable metrics collection                                 |
+| `INGEST_CORE__METRICS_PORT`            | `9464`             | HTTP port for metrics endpoint                                    |
+| `INGEST_CORE__METRICS_HOST`            | `0.0.0.0`          | HTTP host for metrics endpoint                                    |
+| `INGEST_CORE__METRICS_PATH`            | `/metrics`         | HTTP path for metrics endpoint                                    |
+| `INGEST_CORE__METRICS_PREFIX`          | `pagermon_ingest_` | Prefix for all metrics                                            |
+| `INGEST_CORE__METRICS_COLLECT_DEFAULT` | `true`             | Collect Node.js default metrics (process, gc, etc.)               |
+| `INGEST_CORE__METRICS_DEFAULT_LABELS`  | (empty)            | Parsed from config, but currently not applied to exported metrics |
 
 ### Available Metrics
 
-When enabled, the following metrics are automatically collected:
+With the default prefix `pagermon_ingest_`, the runtime exposes the following core metrics.
+
+If you change `INGEST_CORE__METRICS_PREFIX`, prepend that value instead.
 
 **Messages**
 
-- `pagermon_ingest_messages_enqueued_total` – Total messages enqueued
-- `pagermon_ingest_messages_processed_total` – Total messages processed successfully
-- `pagermon_ingest_messages_failed_total` – Total message processing failures
-- `pagermon_ingest_message_process_duration_seconds` – Message processing duration (histogram)
+- `pagermon_ingest_messages_enqueued_total` – Total messages added to the queue
+- `pagermon_ingest_messages_processed_total{status="success"}` – Total messages processed successfully
+- `pagermon_ingest_messages_failed_total{reason="http_<code>|network_error"}` – Total failed message submissions
+- `pagermon_ingest_message_process_duration_seconds{status="success|failure"}` – Message processing duration histogram
+- `pagermon_ingest_last_message_timestamp_seconds` – Unix timestamp of the last successfully processed message
 
 **Queue**
 
-- `pagermon_ingest_queue_depth` – Current queue depth (number of pending messages)
+- `pagermon_ingest_queue_depth_messages` – Current queue depth (number of pending messages)
 
 **Health**
 
-- `pagermon_ingest_api_health_status` – API health (1=healthy, 0=unhealthy)
+- `pagermon_ingest_api_up` – API health (1=healthy, 0=unhealthy)
 - `pagermon_ingest_health_check_failures_total` – Total failed health checks
 
 **Adapter**
 
-- `pagermon_ingest_adapter_running` – Adapter status (1=running, 0=stopped)
-- `pagermon_ingest_last_message_timestamp_seconds` – Unix timestamp of last processed message
+- `pagermon_ingest_adapter_up` – Adapter status (1=running, 0=stopped)
 
 **Optional (if enabled)**
 
 - Node.js process metrics (memory, CPU, GC, event loop, etc.)
+
+### Custom Adapter Metrics
+
+When developing adapters, `ingest-core` injects a metrics registry as `config.metrics`.
+
+- Register adapter metrics via `counter`, `gauge`, and `histogram`.
+- Define metric names without the global prefix.
+- Keep names stable and express dimensions via labels.
+
+Detailed implementation examples, test assertions, and naming guidance are documented in [ADAPTER_DEVELOPMENT.md](./ADAPTER_DEVELOPMENT.md).
 
 ### Example Usage
 
@@ -264,6 +268,7 @@ curl http://localhost:9464/metrics
 You can always build your own adapter to support other sources, such as PDW, incoming emails, polling from websites and so on.
 
 - Full adapter contract and implementation guide: [ADAPTER_DEVELOPMENT.md](./ADAPTER_DEVELOPMENT.md)
+- Metrics registration and observability guidance for adapter authors: [ADAPTER_DEVELOPMENT.md](./ADAPTER_DEVELOPMENT.md)
 
 Rule of thumb:
 

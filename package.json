@@ -4,6 +4,10 @@
   "description": "PagerMon ingest core runtime",
   "type": "module",
   "main": "index.js",
+  "exports": {
+    ".": "./api.js",
+    "./testing": "./test/helpers/index.js"
+  },
   "scripts": {
     "start": "node index.js",
     "test": "vitest run --coverage",
