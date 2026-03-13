@@ -126,51 +126,57 @@ describe('config', () => {
   it('supports Docker secrets via INGEST_CORE__API_KEY_FILE for single target', async () => {
     const secretPath = path.join(os.tmpdir(), `ingest-core-key-${Date.now()}-${Math.random()}.txt`);
     fs.writeFileSync(secretPath, 'secret-from-file\n', 'utf8');
+    try {
+      const { default: config } = await loadConfigWithEnv({
+        INGEST_CORE__API_URL: 'http://api-a:3000',
+        INGEST_CORE__API_KEY_FILE: secretPath,
+      });
 
-    const { default: config } = await loadConfigWithEnv({
-      INGEST_CORE__API_URL: 'http://api-a:3000',
-      INGEST_CORE__API_KEY_FILE: secretPath,
-    });
-
-    expect(config.apiTargets).toEqual([
-      { id: 'target-1', name: 'target-1', url: 'http://api-a:3000', apiKey: 'secret-from-file' },
-    ]);
-    fs.unlinkSync(secretPath);
+      expect(config.apiTargets).toEqual([
+        { id: 'target-1', name: 'target-1', url: 'http://api-a:3000', apiKey: 'secret-from-file' },
+      ]);
+    } finally {
+      fs.unlinkSync(secretPath);
+    }
   });
 
   it('supports Docker secrets via INGEST_CORE__API_<n>_KEY_FILE for enumerated targets', async () => {
     const secretPath = path.join(os.tmpdir(), `ingest-core-key-n-${Date.now()}-${Math.random()}.txt`);
     fs.writeFileSync(secretPath, 'secret-two\n', 'utf8');
+    try {
+      const { default: config } = await loadConfigWithEnv({
+        INGEST_CORE__API_1_URL: 'http://api-a:3000',
+        INGEST_CORE__API_1_KEY: 'key-a',
+        INGEST_CORE__API_2_URL: 'http://api-b:3000',
+        INGEST_CORE__API_2_KEY_FILE: secretPath,
+      });
 
-    const { default: config } = await loadConfigWithEnv({
-      INGEST_CORE__API_1_URL: 'http://api-a:3000',
-      INGEST_CORE__API_1_KEY: 'key-a',
-      INGEST_CORE__API_2_URL: 'http://api-b:3000',
-      INGEST_CORE__API_2_KEY_FILE: secretPath,
-    });
-
-    expect(config.apiTargets).toEqual([
-      { id: 'target-1', name: 'target-1', url: 'http://api-a:3000', apiKey: 'key-a' },
-      { id: 'target-2', name: 'target-2', url: 'http://api-b:3000', apiKey: 'secret-two' },
-    ]);
-    fs.unlinkSync(secretPath);
+      expect(config.apiTargets).toEqual([
+        { id: 'target-1', name: 'target-1', url: 'http://api-a:3000', apiKey: 'key-a' },
+        { id: 'target-2', name: 'target-2', url: 'http://api-b:3000', apiKey: 'secret-two' },
+      ]);
+    } finally {
+      fs.unlinkSync(secretPath);
+    }
   });
 
   it('validate() exits when KEY and KEY_FILE are both defined for the same target', async () => {
     const secretPath = path.join(os.tmpdir(), `ingest-core-key-conflict-${Date.now()}-${Math.random()}.txt`);
     fs.writeFileSync(secretPath, 'from-file\n', 'utf8');
+    try {
+      const { default: config } = await loadConfigWithEnv({
+        INGEST_CORE__API_URL: 'http://api-a:3000',
+        INGEST_CORE__API_KEY: 'from-env',
+        INGEST_CORE__API_KEY_FILE: secretPath,
+      });
 
-    const { default: config } = await loadConfigWithEnv({
-      INGEST_CORE__API_URL: 'http://api-a:3000',
-      INGEST_CORE__API_KEY: 'from-env',
-      INGEST_CORE__API_KEY_FILE: secretPath,
-    });
-
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
-    config.validate();
-    expect(exitSpy).toHaveBeenCalledWith(1);
-    exitSpy.mockRestore();
-    fs.unlinkSync(secretPath);
+      const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+      config.validate();
+      expect(exitSpy).toHaveBeenCalledWith(1);
+      exitSpy.mockRestore();
+    } finally {
+      fs.unlinkSync(secretPath);
+    }
   });
 
   it('validate() exits when API_URL and API_1_URL are both defined', async () => {
