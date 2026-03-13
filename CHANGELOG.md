@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0](https://github.com/eopo/pagermon-ingest-core/compare/1.4.0...1.5.0) (2026-03-13)
+
+
+### Features
+
+* introduce Message class enhancements for format inference ([318cdbc](https://github.com/eopo/pagermon-ingest-core/commit/318cdbca3380480b8de48368cbb9d7940ab34ac9))
+* multi-target API delivery with per-target config ([#34](https://github.com/eopo/pagermon-ingest-core/issues/34)) ([d770f9c](https://github.com/eopo/pagermon-ingest-core/commit/d770f9cd9b5b6d636a433e9ddb58205a49a2aa80))
+
+
+### Bug Fixes
+
+* ensure QueueManager and Worker use updated metrics mocks ([318cdbc](https://github.com/eopo/pagermon-ingest-core/commit/318cdbca3380480b8de48368cbb9d7940ab34ac9))
+
 ## [1.4.0](https://github.com/eopo/pagermon-ingest-core/compare/1.3.1...1.4.0) (2026-03-10)
 
 
