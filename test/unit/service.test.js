@@ -22,7 +22,7 @@ function buildServiceMocks({ queueInitReject = null, triggerOnError = false } = 
     initialize: vi.fn(() => Promise.resolve()),
     shutdown: vi.fn(() => Promise.resolve()),
     startReadingMessages: vi.fn(async (onMessage, onClose, onError) => {
-      const message = { address: '123', source: 'old-source' };
+      const message = { address: '123', metadata: { source: 'old-source' } };
       await onMessage(message);
 
       if (triggerOnError) {
@@ -117,7 +117,7 @@ async function loadRunService({ queueInitReject = null, triggerOnError = false }
 }
 
 describe('runService', () => {
-  it('initializes services, preserves adapter source and handles graceful shutdown on SIGTERM', async () => {
+  it('initializes services, uses metadata.source override and handles graceful shutdown on SIGTERM', async () => {
     const onListeners = {};
     const onSpy = vi.spyOn(process, 'on').mockImplementation((event, cb) => {
       onListeners[event] = cb;
@@ -164,7 +164,29 @@ describe('runService', () => {
 
     const { runService, services } = await loadRunService();
     services.orchestrator.startReadingMessages = vi.fn(async (onMessage) => {
-      await onMessage({ address: '123', source: '' });
+      await onMessage({ address: '123' });
+    });
+
+    await runService();
+
+    const [queuedMessage] = services.queue.addMessage.mock.calls[0];
+    expect(queuedMessage.source).toBe('test-label');
+
+    onSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
+  it('ignores legacy top-level source and still defaults to label', async () => {
+    const onListeners = {};
+    const onSpy = vi.spyOn(process, 'on').mockImplementation((event, cb) => {
+      onListeners[event] = cb;
+      return process;
+    });
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+
+    const { runService, services } = await loadRunService();
+    services.orchestrator.startReadingMessages = vi.fn(async (onMessage) => {
+      await onMessage({ address: '123', source: 'legacy-source' });
     });
 
     await runService();
@@ -216,7 +238,7 @@ describe('runService', () => {
 
     const [queuedMessage] = services.queue.addMessage.mock.calls[0];
     expect(queuedMessage.format).toBe('numeric');
-    expect(queuedMessage.metadata.format).toBe('numeric');
+    expect(queuedMessage.metadata).toBeUndefined();
 
     onSpy.mockRestore();
     exitSpy.mockRestore();

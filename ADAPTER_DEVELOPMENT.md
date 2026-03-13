@@ -238,6 +238,15 @@ class MyAdapter {
   }
 
   start(onMessage, onClose, onError) {
+    if (this.running) {
+      return;
+    }
+
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
+    }
+
     this.onMessage = onMessage;
     this.onClose = onClose;
     this.onError = onError;
@@ -263,22 +272,29 @@ class MyAdapter {
       const payload = await response.json();
       this.upstreamUp.set(1);
 
+      let invalidItems = 0;
+
       for (const item of payload.messages || []) {
         const msg = new Message({
           address: String(item.address || ''),
           message: String(item.message || ''),
           format: item.format === 'numeric' ? 'numeric' : 'alpha',
-          source: this.label,
+          metadata: { source: this.label },
         });
 
         const result = msg.validate();
         if (!result.valid) {
-          this.onError(new Error(`Invalid message: ${result.errors.join(', ')}`));
+          invalidItems += 1;
+          this.logger.warn({ errors: result.errors, item }, 'Skipping invalid upstream item');
           continue;
         }
 
         this.receivedTotal.inc({ source: this.label, format: msg.format });
         this.onMessage(msg);
+      }
+
+      if (invalidItems > 0) {
+        this.logger.warn({ invalidItems }, 'Some upstream items were skipped due to validation errors');
       }
 
       end({ result: 'success' });
@@ -447,23 +463,22 @@ Payload behavior:
 
 Source behavior:
 
-- `Message.source` is optional at construction time
-- if adapter omits source (empty or missing), core defaults it to `INGEST_CORE__LABEL`
-- if adapter provides source, core preserves it
+- adapters provide source only via `metadata.source`
+- if `metadata.source` is empty or missing, core defaults source to `INGEST_CORE__LABEL`
+- no top-level `source` input field is used for source resolution
 
 For `alpha`, provide non-empty `message`.
 
 Message field reference:
 
-| Field       | Required | Type     | Notes                                                             |
-| ----------- | -------- | -------- | ----------------------------------------------------------------- |
-| `address`   | yes      | `string` | receiver/capcode                                                  |
-| `message`   | no       | `string` | required only if resolved format is `alpha`                       |
-| `format`    | no       | `string` | resolved from `format`/`metadata.format`/fallback inference       |
-| `source`    | no       | `string` | optional; core defaults to `INGEST_CORE__LABEL` when not provided |
-| `timestamp` | no       | `number` | unix timestamp in seconds                                         |
-| `time`      | no       | `string` | ISO8601 timestamp                                                 |
-| `metadata`  | no       | `object` | protocol-specific fields; merged into payload as top-level fields |
+| Field       | Required | Type     | Notes                                                         |
+| ----------- | -------- | -------- | ------------------------------------------------------------- |
+| `address`   | yes      | `string` | receiver/capcode                                              |
+| `message`   | no       | `string` | required only if resolved format is `alpha`                   |
+| `format`    | no       | `string` | resolved from `format`/`metadata.format`/fallback inference   |
+| `timestamp` | no       | `number` | unix timestamp in seconds                                     |
+| `time`      | no       | `string` | ISO8601 timestamp                                             |
+| `metadata`  | no       | `object` | protocol-specific fields; includes optional `metadata.source` |
 
 Validate before emit when your parser receives untrusted input:
 
@@ -769,23 +784,23 @@ Core settings (`INGEST_CORE__*`) are parsed and validated by ingest-core.
 
 ### Core Variables
 
-| Variable                                  | Required | Default                   | Description                                                     |
-| ----------------------------------------- | -------- | ------------------------- | --------------------------------------------------------------- |
-| `INGEST_CORE__API_URL`                    | yes      | `http://pagermon:3000`    | PagerMon API base URL used by ingest worker                     |
-| `INGEST_CORE__API_KEY`                    | yes      | none                      | API key for authenticated message submission                    |
-| `INGEST_CORE__LABEL`                      | no       | `pagermon-ingest`         | Default message source label when adapter does not set `source` |
-| `INGEST_CORE__REDIS_URL`                  | no       | `redis://redis:6379`      | Redis connection string for queue storage                       |
-| `INGEST_CORE__ENABLE_DLQ`                 | no       | `true`                    | Enables dead-letter queue for permanently failed jobs           |
-| `INGEST_CORE__HEALTH_CHECK_INTERVAL`      | no       | `10000`                   | Interval in ms for PagerMon health checks                       |
-| `INGEST_CORE__HEALTH_UNHEALTHY_THRESHOLD` | no       | `3`                       | Failed health checks before service is marked unhealthy         |
-| `INGEST_CORE__ADAPTER_ENTRY`              | no       | `/app/adapter/adapter.js` | Adapter module path used in loader mode                         |
-| `INGEST_CORE__METRICS_ENABLED`            | no       | `false`                   | Expose metrics endpoint over HTTP                               |
-| `INGEST_CORE__METRICS_PORT`               | no       | `9464`                    | Metrics HTTP port                                               |
-| `INGEST_CORE__METRICS_HOST`               | no       | `0.0.0.0`                 | Metrics bind host                                               |
-| `INGEST_CORE__METRICS_PATH`               | no       | `/metrics`                | Metrics endpoint path                                           |
-| `INGEST_CORE__METRICS_PREFIX`             | no       | `pagermon_ingest_`        | Prefix prepended to all exported metric names                   |
-| `INGEST_CORE__METRICS_COLLECT_DEFAULT`    | no       | `true`                    | Collect default Node.js process metrics                         |
-| `INGEST_CORE__METRICS_DEFAULT_LABELS`     | no       | empty                     | Comma-separated labels (`key=value,key2=value2`) parsed by core |
+| Variable                                  | Required | Default                   | Description                                                                    |
+| ----------------------------------------- | -------- | ------------------------- | ------------------------------------------------------------------------------ |
+| `INGEST_CORE__API_URL`                    | no       | `http://pagermon:3000`    | PagerMon API base URL used by ingest worker; defaults when variable is not set |
+| `INGEST_CORE__API_KEY`                    | yes      | none                      | API key for authenticated message submission                                   |
+| `INGEST_CORE__LABEL`                      | no       | `pagermon-ingest`         | Default message source label when adapter omits `metadata.source`              |
+| `INGEST_CORE__REDIS_URL`                  | no       | `redis://redis:6379`      | Redis connection string for queue storage                                      |
+| `INGEST_CORE__ENABLE_DLQ`                 | no       | `true`                    | Enables dead-letter queue for permanently failed jobs                          |
+| `INGEST_CORE__HEALTH_CHECK_INTERVAL`      | no       | `10000`                   | Interval in ms for PagerMon health checks                                      |
+| `INGEST_CORE__HEALTH_UNHEALTHY_THRESHOLD` | no       | `3`                       | Failed health checks before service is marked unhealthy                        |
+| `INGEST_CORE__ADAPTER_ENTRY`              | no       | `/app/adapter/adapter.js` | Adapter module path used in loader mode                                        |
+| `INGEST_CORE__METRICS_ENABLED`            | no       | `false`                   | Expose metrics endpoint over HTTP                                              |
+| `INGEST_CORE__METRICS_PORT`               | no       | `9464`                    | Metrics HTTP port                                                              |
+| `INGEST_CORE__METRICS_HOST`               | no       | `0.0.0.0`                 | Metrics bind host                                                              |
+| `INGEST_CORE__METRICS_PATH`               | no       | `/metrics`                | Metrics endpoint path                                                          |
+| `INGEST_CORE__METRICS_PREFIX`             | no       | `pagermon_ingest_`        | Prefix prepended to all exported metric names                                  |
+| `INGEST_CORE__METRICS_COLLECT_DEFAULT`    | no       | `true`                    | Collect default Node.js process metrics                                        |
+| `INGEST_CORE__METRICS_DEFAULT_LABELS`     | no       | empty                     | Comma-separated labels (`key=value,key2=value2`) parsed by core                |
 
 ### Adapter Variables
 
