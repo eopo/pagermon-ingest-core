@@ -176,17 +176,17 @@ Required configuration:
 
 ```bash
 # Target 1 via alias variables
-INGEST_CORE__API_URL=http://pagermon:3000
 INGEST_CORE__API_NAME=pm-prod-a
+INGEST_CORE__API_URL=http://pagermon:3000
 INGEST_CORE__API_KEY=key_a
 
 # Additional targets via enumerated variables
-INGEST_CORE__API_1_URL=http://pagermon-a:3000
-INGEST_CORE__API_1_NAME=pm-prod-a
-INGEST_CORE__API_1_KEY=key_a
-INGEST_CORE__API_2_URL=http://pagermon-b:3000
 INGEST_CORE__API_2_NAME=pm-prod-b
+INGEST_CORE__API_2_URL=http://pagermon-b:3000
 INGEST_CORE__API_2_KEY=key_b
+INGEST_CORE__API_3_NAME=pm-prod-c
+INGEST_CORE__API_3_URL=http://pagermon-c:3000
+INGEST_CORE__API_3_KEY=key_c
 ```
 
 Docker secrets are supported for keys via `*_KEY_FILE`:
@@ -201,6 +201,7 @@ Rules:
 - `INGEST_CORE__API_URL`/`INGEST_CORE__API_KEY`/`INGEST_CORE__API_KEY_FILE` map to target `1`
 - `INGEST_CORE__API_NAME`/`INGEST_CORE__API_<n>_NAME` define stable target names for metrics labels
 - `INGEST_CORE__API_<n>_URL` with `INGEST_CORE__API_<n>_KEY` or `INGEST_CORE__API_<n>_KEY_FILE` define target `n`
+- when alias target variables (`API_URL`/`API_NAME`/`API_KEY[_FILE]`) are used, start additional targets at `API_2_*` - or move the `API_*` ones to `API_1_*`
 - per target, `KEY` and `KEY_FILE` are mutually exclusive (do not set both)
 - if `*_KEY_FILE` is unreadable or points to an empty file, startup fails with a configuration error
 - alias variables and enumerated variables can be combined in one configuration

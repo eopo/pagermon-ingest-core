@@ -39,11 +39,12 @@ async function loadRunService({ queueInitReject = null, triggerOnError = false, 
 
   const services = buildServiceMocks({ queueInitReject, triggerOnError });
   const orchestratorCtorArgs = [];
+  const configuredApiTargets = apiTargets || [{ id: 'default', url: 'http://api:3000', apiKey: 'test-key' }];
 
   vi.doMock('../../lib/config.js', () => ({
     default: {
       label: 'test-label',
-      apiTargets: apiTargets || [{ id: 'default', url: 'http://api:3000', apiKey: 'test-key' }],
+      apiTargets: configuredApiTargets,
       redisUrl: 'redis://redis:6379',
       enableDLQ: true,
       healthCheckInterval: 100,
@@ -112,7 +113,7 @@ async function loadRunService({ queueInitReject = null, triggerOnError = false, 
   }));
 
   const { runService } = await import('../../lib/runtime/service.js');
-  return { runService, services, orchestratorCtorArgs };
+  return { runService, services, orchestratorCtorArgs, configuredApiTargets };
 }
 
 describe('runService', () => {
@@ -124,7 +125,7 @@ describe('runService', () => {
     });
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
 
-    const { runService, services, orchestratorCtorArgs } = await loadRunService();
+    const { runService, services, orchestratorCtorArgs, configuredApiTargets } = await loadRunService();
     const adapterFactory = vi.fn();
 
     await runService({ adapterFactory });
@@ -146,7 +147,7 @@ describe('runService', () => {
     expect(services.orchestrator.shutdown).toHaveBeenCalledTimes(1);
     expect(services.worker.stop).toHaveBeenCalledTimes(1);
     expect(services.queue.close).toHaveBeenCalledTimes(1);
-    expect(services.health.stop).toHaveBeenCalledTimes(services.queue.addMessage.mock.calls.length || 1);
+    expect(services.health.stop).toHaveBeenCalledTimes(configuredApiTargets.length);
     expect(exitSpy).toHaveBeenCalledWith(0);
 
     onSpy.mockRestore();
@@ -292,7 +293,7 @@ describe('runService', () => {
   it('shuts down with code 1 when adapter stream reports an error', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
 
-    const { runService, services } = await loadRunService({ triggerOnError: true });
+    const { runService, services, configuredApiTargets } = await loadRunService({ triggerOnError: true });
 
     await runService();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -300,7 +301,7 @@ describe('runService', () => {
     expect(services.orchestrator.shutdown).toHaveBeenCalledTimes(1);
     expect(services.worker.stop).toHaveBeenCalledTimes(1);
     expect(services.queue.close).toHaveBeenCalledTimes(1);
-    expect(services.health.stop).toHaveBeenCalledTimes(services.queue.addMessage.mock.calls.length || 1);
+    expect(services.health.stop).toHaveBeenCalledTimes(configuredApiTargets.length);
     expect(exitSpy).toHaveBeenCalledWith(1);
 
     exitSpy.mockRestore();

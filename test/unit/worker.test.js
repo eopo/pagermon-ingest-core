@@ -101,6 +101,8 @@ describe('Worker', () => {
     });
 
     expect(result).toEqual({ ok: true });
+    expect(apiClients['target-b'].submitMessage).toHaveBeenCalledTimes(1);
+    expect(apiClients['target-a'].submitMessage).not.toHaveBeenCalled();
     expect(apiClients['target-b'].submitMessage).toHaveBeenCalledWith({
       address: '123',
       source: 'x',

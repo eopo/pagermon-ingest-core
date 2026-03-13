@@ -113,12 +113,13 @@ describe('config', () => {
       INGEST_CORE__API_URL: 'http://api-a:3000',
       INGEST_CORE__API_KEY: 'key-a',
       INGEST_CORE__API_2_URL: 'http://api-b:3000',
+      INGEST_CORE__API_2_NAME: 'pm-prod-b',
       INGEST_CORE__API_2_KEY: 'key-b',
     });
 
     expect(config.apiTargets).toEqual([
       { id: 'target-1', name: 'target-1', url: 'http://api-a:3000', apiKey: 'key-a' },
-      { id: 'target-2', name: 'target-2', url: 'http://api-b:3000', apiKey: 'key-b' },
+      { id: 'target-2', name: 'pm-prod-b', url: 'http://api-b:3000', apiKey: 'key-b' },
     ]);
   });
 
@@ -170,6 +171,49 @@ describe('config', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
     exitSpy.mockRestore();
     fs.unlinkSync(secretPath);
+  });
+
+  it('validate() exits when API_URL and API_1_URL are both defined', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
+      INGEST_CORE__API_KEY: 'key-a',
+      INGEST_CORE__API_1_URL: 'http://api-b:3000',
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+    config.validate();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    exitSpy.mockRestore();
+  });
+
+  it('validate() exits when API_NAME and API_1_NAME are both defined', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
+      INGEST_CORE__API_KEY: 'key-a',
+      INGEST_CORE__API_NAME: 'name-a',
+      INGEST_CORE__API_1_NAME: 'name-b',
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+    config.validate();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    exitSpy.mockRestore();
+  });
+
+  it('validate() exits when duplicate target names are configured', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
+      INGEST_CORE__API_NAME: 'duplicate-name',
+      INGEST_CORE__API_KEY: 'key-a',
+      INGEST_CORE__API_2_URL: 'http://api-b:3000',
+      INGEST_CORE__API_2_NAME: 'duplicate-name',
+      INGEST_CORE__API_2_KEY: 'key-b',
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+    config.validate();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    exitSpy.mockRestore();
   });
 
   it('validate() exits when KEY_FILE cannot be read', async () => {

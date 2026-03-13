@@ -348,12 +348,14 @@ INGEST_CORE__API_KEY=key_a
 # INGEST_CORE__API_KEY_FILE=/run/secrets/pagermon_api_key
 
 # Additional targets
-# INGEST_CORE__API_1_URL=http://pagermon-a:3000
-# INGEST_CORE__API_1_NAME=pm-prod-a
-# INGEST_CORE__API_1_KEY=key_a
-# INGEST_CORE__API_2_URL=http://pagermon-b:3000
+# Start extra targets at API_2_* when API_URL/API_NAME/API_KEY are used.
+# API_* is an alias for API_1, so you can use API_1_* if you prefer to do so. Don't mix API_* and API_1_* though!
 # INGEST_CORE__API_2_NAME=pm-prod-b
-# INGEST_CORE__API_2_KEY_FILE=/run/secrets/pagermon_api2_key
+# INGEST_CORE__API_2_URL=http://pagermon-b:3000
+# INGEST_CORE__API_2_KEY=key_b
+# INGEST_CORE__API_3_NAME=pm-prod-c
+# INGEST_CORE__API_3_URL=http://pagermon-c:3000
+# INGEST_CORE__API_3_KEY_FILE=/run/secrets/pagermon_api3_key
 
 # Optional core settings
 INGEST_CORE__LABEL=my-adapter
