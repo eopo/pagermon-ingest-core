@@ -10,11 +10,11 @@ class ApiClientTestFacade {
   }
 
   async submitMessage(message) {
-    return await this.client.submitMessage(message);
+    return this.client.submitMessage(message);
   }
 
   async checkHealth() {
-    return await this.client.checkHealth();
+    return this.client.checkHealth();
   }
 }
 

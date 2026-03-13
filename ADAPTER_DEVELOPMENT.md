@@ -485,7 +485,7 @@ Validate before emit when your parser receives untrusted input:
 ```javascript
 const result = msg.validate();
 if (!result.valid) {
-  onError(new Error(result.errors.join(', ')));
+  logger.warn({ errors: result.errors }, 'Skipping invalid message');
   return;
 }
 onMessage(msg);
