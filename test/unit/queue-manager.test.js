@@ -94,11 +94,11 @@ describe('QueueManager', () => {
     const enqueuedCounter = metrics.counter.mock.results[0].value;
     const queueDepthGauge = metrics.gauge.mock.results[0].value;
 
-    const payload = { source: 'rx1', address: '12345', timestamp: 1710000000 };
+    const payload = { source: 'rx1', address: '12345', timestamp: 1710000000, targetId: 'target-2' };
     await manager.addMessage({ toPayload: () => payload });
 
     expect(queueInstances[0].add).toHaveBeenCalledWith('message', payload, {
-      jobId: 'msg-rx1-12345-1710000000',
+      jobId: 'msg-target-2-rx1-12345-1710000000',
     });
     expect(enqueuedCounter.inc).toHaveBeenCalledTimes(1);
     expect(queueDepthGauge.inc).toHaveBeenCalledTimes(1);

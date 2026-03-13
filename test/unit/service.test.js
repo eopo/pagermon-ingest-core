@@ -34,17 +34,17 @@ function buildServiceMocks({ queueInitReject = null, triggerOnError = false } = 
   return { queue, health, worker, orchestrator };
 }
 
-async function loadRunService({ queueInitReject = null, triggerOnError = false } = {}) {
+async function loadRunService({ queueInitReject = null, triggerOnError = false, apiTargets } = {}) {
   vi.resetModules();
 
   const services = buildServiceMocks({ queueInitReject, triggerOnError });
   const orchestratorCtorArgs = [];
+  const configuredApiTargets = apiTargets || [{ id: 'default', url: 'http://api:3000', apiKey: 'test-key' }];
 
   vi.doMock('../../lib/config.js', () => ({
     default: {
       label: 'test-label',
-      apiUrl: 'http://api:3000',
-      apiKey: 'test-key',
+      apiTargets: configuredApiTargets,
       redisUrl: 'redis://redis:6379',
       enableDLQ: true,
       healthCheckInterval: 100,
@@ -113,7 +113,7 @@ async function loadRunService({ queueInitReject = null, triggerOnError = false }
   }));
 
   const { runService } = await import('../../lib/runtime/service.js');
-  return { runService, services, orchestratorCtorArgs };
+  return { runService, services, orchestratorCtorArgs, configuredApiTargets };
 }
 
 describe('runService', () => {
@@ -125,7 +125,7 @@ describe('runService', () => {
     });
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
 
-    const { runService, services, orchestratorCtorArgs } = await loadRunService();
+    const { runService, services, orchestratorCtorArgs, configuredApiTargets } = await loadRunService();
     const adapterFactory = vi.fn();
 
     await runService({ adapterFactory });
@@ -147,7 +147,7 @@ describe('runService', () => {
     expect(services.orchestrator.shutdown).toHaveBeenCalledTimes(1);
     expect(services.worker.stop).toHaveBeenCalledTimes(1);
     expect(services.queue.close).toHaveBeenCalledTimes(1);
-    expect(services.health.stop).toHaveBeenCalledTimes(1);
+    expect(services.health.stop).toHaveBeenCalledTimes(configuredApiTargets.length);
     expect(exitSpy).toHaveBeenCalledWith(0);
 
     onSpy.mockRestore();
@@ -244,6 +244,39 @@ describe('runService', () => {
     exitSpy.mockRestore();
   });
 
+  it('fans out one incoming message to all configured API targets', async () => {
+    const onListeners = {};
+    const onSpy = vi.spyOn(process, 'on').mockImplementation((event, cb) => {
+      onListeners[event] = cb;
+      return process;
+    });
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+
+    const { runService, services } = await loadRunService({
+      apiTargets: [
+        { id: 'primary', url: 'http://api-a:3000', apiKey: 'k-a' },
+        { id: 'backup', url: 'http://api-b:3000', apiKey: 'k-b' },
+      ],
+    });
+
+    services.orchestrator.startReadingMessages = vi.fn(async (onMessage) => {
+      await onMessage({ address: '123', message: 'HELLO', metadata: { source: 'sdr-a' } });
+    });
+
+    await runService();
+
+    expect(services.queue.addMessage).toHaveBeenCalledTimes(2);
+    const firstPayload = services.queue.addMessage.mock.calls[0][0];
+    const secondPayload = services.queue.addMessage.mock.calls[1][0];
+    expect(firstPayload.targetId).toBe('primary');
+    expect(secondPayload.targetId).toBe('backup');
+    expect(firstPayload.source).toBe('sdr-a');
+    expect(secondPayload.source).toBe('sdr-a');
+
+    onSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
   it('exits with code 1 when initialization fails', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
 
@@ -260,7 +293,7 @@ describe('runService', () => {
   it('shuts down with code 1 when adapter stream reports an error', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
 
-    const { runService, services } = await loadRunService({ triggerOnError: true });
+    const { runService, services, configuredApiTargets } = await loadRunService({ triggerOnError: true });
 
     await runService();
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -268,7 +301,7 @@ describe('runService', () => {
     expect(services.orchestrator.shutdown).toHaveBeenCalledTimes(1);
     expect(services.worker.stop).toHaveBeenCalledTimes(1);
     expect(services.queue.close).toHaveBeenCalledTimes(1);
-    expect(services.health.stop).toHaveBeenCalledTimes(1);
+    expect(services.health.stop).toHaveBeenCalledTimes(configuredApiTargets.length);
     expect(exitSpy).toHaveBeenCalledWith(1);
 
     exitSpy.mockRestore();

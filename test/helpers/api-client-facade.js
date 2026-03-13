@@ -9,11 +9,11 @@ class ApiClientTestFacade {
     this.client = new InternalApiClient(config, options);
   }
 
-  async submitMessage(message) {
+  submitMessage(message) {
     return this.client.submitMessage(message);
   }
 
-  async checkHealth() {
+  checkHealth() {
     return this.client.checkHealth();
   }
 }
