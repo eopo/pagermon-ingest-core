@@ -60,8 +60,10 @@ On startup, the core follows this sequence:
 4. Start adapter stream processing.
 5. For each emitted message:
    - set source label
-   - enqueue message
-   - worker submits to PagerMon API
+
+- enqueue one delivery job per configured API target
+- worker submits to PagerMon API
+
 6. On signal/error: stop adapter pipeline and core services gracefully.
 
 This behavior is orchestrated in `lib/runtime/service.js` and `lib/runtime/pipeline.js`.
@@ -168,15 +170,42 @@ docker build -t shutterfire/pagermon-ingest-core:<release-tag> .
 
 ## Using Ingest with PagerMon Server
 
-Ingest sends messages to PagerMon server API endpoint `INGEST_CORE__API_URL`.
+Ingest delivers to one or multiple PagerMon API targets using ENV configuration.
 
-If both services run in one compose project, set:
+Required configuration:
 
 ```bash
+# Target 1 via alias variables
 INGEST_CORE__API_URL=http://pagermon:3000
+INGEST_CORE__API_NAME=pm-prod-a
+INGEST_CORE__API_KEY=key_a
+
+# Additional targets via enumerated variables
+INGEST_CORE__API_1_URL=http://pagermon-a:3000
+INGEST_CORE__API_1_NAME=pm-prod-a
+INGEST_CORE__API_1_KEY=key_a
+INGEST_CORE__API_2_URL=http://pagermon-b:3000
+INGEST_CORE__API_2_NAME=pm-prod-b
+INGEST_CORE__API_2_KEY=key_b
 ```
 
-Where `pagermon` is the server service name.
+Docker secrets are supported for keys via `*_KEY_FILE`:
+
+```bash
+INGEST_CORE__API_KEY_FILE=/run/secrets/pagermon_api_key
+INGEST_CORE__API_2_KEY_FILE=/run/secrets/pagermon_api2_key
+```
+
+Rules:
+
+- `INGEST_CORE__API_URL`/`INGEST_CORE__API_KEY`/`INGEST_CORE__API_KEY_FILE` map to target `1`
+- `INGEST_CORE__API_NAME`/`INGEST_CORE__API_<n>_NAME` define stable target names for metrics labels
+- `INGEST_CORE__API_<n>_URL` with `INGEST_CORE__API_<n>_KEY` or `INGEST_CORE__API_<n>_KEY_FILE` define target `n`
+- per target, `KEY` and `KEY_FILE` are mutually exclusive (do not set both)
+- if `*_KEY_FILE` is unreadable or points to an empty file, startup fails with a configuration error
+- alias variables and enumerated variables can be combined in one configuration
+- each incoming message is enqueued once per configured target
+- delivery is queued per target, so retries/failures are isolated per API target
 
 ## Metrics & Observability
 
@@ -216,10 +245,10 @@ If you change `INGEST_CORE__METRICS_PREFIX`, prepend that value instead.
 **Messages**
 
 - `pagermon_ingest_messages_enqueued_total` – Total messages added to the queue
-- `pagermon_ingest_messages_processed_total{status="success"}` – Total messages processed successfully
-- `pagermon_ingest_messages_failed_total{reason="http_<code>|network_error"}` – Total failed message submissions
-- `pagermon_ingest_message_process_duration_seconds{status="success|failure"}` – Message processing duration histogram
-- `pagermon_ingest_last_message_timestamp_seconds` – Unix timestamp of the last successfully processed message
+- `pagermon_ingest_messages_processed_total{status="success",target_name="..."}` – Total messages processed successfully per API target
+- `pagermon_ingest_messages_failed_total{reason="http_<code>|network_error",target_name="..."}` – Total failed message submissions per API target
+- `pagermon_ingest_message_process_duration_seconds{status="success|failure",target_name="..."}` – Message processing duration histogram per API target
+- `pagermon_ingest_last_message_timestamp_seconds{target_name="..."}` – Unix timestamp of the last successfully processed message per API target
 
 **Queue**
 
@@ -227,8 +256,8 @@ If you change `INGEST_CORE__METRICS_PREFIX`, prepend that value instead.
 
 **Health**
 
-- `pagermon_ingest_api_up` – API health (1=healthy, 0=unhealthy)
-- `pagermon_ingest_health_check_failures_total` – Total failed health checks
+- `pagermon_ingest_api_up{target_name="..."}` – API health (1=healthy, 0=unhealthy) per target
+- `pagermon_ingest_health_check_failures_total{target_name="..."}` – Total failed health checks per target
 
 **Adapter**
 

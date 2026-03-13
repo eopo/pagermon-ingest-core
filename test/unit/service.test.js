@@ -34,7 +34,7 @@ function buildServiceMocks({ queueInitReject = null, triggerOnError = false } = 
   return { queue, health, worker, orchestrator };
 }
 
-async function loadRunService({ queueInitReject = null, triggerOnError = false } = {}) {
+async function loadRunService({ queueInitReject = null, triggerOnError = false, apiTargets } = {}) {
   vi.resetModules();
 
   const services = buildServiceMocks({ queueInitReject, triggerOnError });
@@ -43,8 +43,7 @@ async function loadRunService({ queueInitReject = null, triggerOnError = false }
   vi.doMock('../../lib/config.js', () => ({
     default: {
       label: 'test-label',
-      apiUrl: 'http://api:3000',
-      apiKey: 'test-key',
+      apiTargets: apiTargets || [{ id: 'default', url: 'http://api:3000', apiKey: 'test-key' }],
       redisUrl: 'redis://redis:6379',
       enableDLQ: true,
       healthCheckInterval: 100,
@@ -147,7 +146,7 @@ describe('runService', () => {
     expect(services.orchestrator.shutdown).toHaveBeenCalledTimes(1);
     expect(services.worker.stop).toHaveBeenCalledTimes(1);
     expect(services.queue.close).toHaveBeenCalledTimes(1);
-    expect(services.health.stop).toHaveBeenCalledTimes(1);
+    expect(services.health.stop).toHaveBeenCalledTimes(services.queue.addMessage.mock.calls.length || 1);
     expect(exitSpy).toHaveBeenCalledWith(0);
 
     onSpy.mockRestore();
@@ -244,6 +243,39 @@ describe('runService', () => {
     exitSpy.mockRestore();
   });
 
+  it('fans out one incoming message to all configured API targets', async () => {
+    const onListeners = {};
+    const onSpy = vi.spyOn(process, 'on').mockImplementation((event, cb) => {
+      onListeners[event] = cb;
+      return process;
+    });
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+
+    const { runService, services } = await loadRunService({
+      apiTargets: [
+        { id: 'primary', url: 'http://api-a:3000', apiKey: 'k-a' },
+        { id: 'backup', url: 'http://api-b:3000', apiKey: 'k-b' },
+      ],
+    });
+
+    services.orchestrator.startReadingMessages = vi.fn(async (onMessage) => {
+      await onMessage({ address: '123', message: 'HELLO', metadata: { source: 'sdr-a' } });
+    });
+
+    await runService();
+
+    expect(services.queue.addMessage).toHaveBeenCalledTimes(2);
+    const firstPayload = services.queue.addMessage.mock.calls[0][0];
+    const secondPayload = services.queue.addMessage.mock.calls[1][0];
+    expect(firstPayload.targetId).toBe('primary');
+    expect(secondPayload.targetId).toBe('backup');
+    expect(firstPayload.source).toBe('sdr-a');
+    expect(secondPayload.source).toBe('sdr-a');
+
+    onSpy.mockRestore();
+    exitSpy.mockRestore();
+  });
+
   it('exits with code 1 when initialization fails', async () => {
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
 
@@ -268,7 +300,7 @@ describe('runService', () => {
     expect(services.orchestrator.shutdown).toHaveBeenCalledTimes(1);
     expect(services.worker.stop).toHaveBeenCalledTimes(1);
     expect(services.queue.close).toHaveBeenCalledTimes(1);
-    expect(services.health.stop).toHaveBeenCalledTimes(1);
+    expect(services.health.stop).toHaveBeenCalledTimes(services.queue.addMessage.mock.calls.length || 1);
     expect(exitSpy).toHaveBeenCalledWith(1);
 
     exitSpy.mockRestore();

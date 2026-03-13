@@ -342,7 +342,18 @@ Create `.env.example`:
 ```bash
 # Required core settings
 INGEST_CORE__API_URL=http://pagermon:3000
-INGEST_CORE__API_KEY=replace_me
+INGEST_CORE__API_NAME=pm-prod-a
+INGEST_CORE__API_KEY=key_a
+# or for Docker secrets
+# INGEST_CORE__API_KEY_FILE=/run/secrets/pagermon_api_key
+
+# Additional targets
+# INGEST_CORE__API_1_URL=http://pagermon-a:3000
+# INGEST_CORE__API_1_NAME=pm-prod-a
+# INGEST_CORE__API_1_KEY=key_a
+# INGEST_CORE__API_2_URL=http://pagermon-b:3000
+# INGEST_CORE__API_2_NAME=pm-prod-b
+# INGEST_CORE__API_2_KEY_FILE=/run/secrets/pagermon_api2_key
 
 # Optional core settings
 INGEST_CORE__LABEL=my-adapter
@@ -523,13 +534,17 @@ Use `config.rawEnv` only for debugging or edge fallback behavior.
 
 Core defaults relevant during local development:
 
-- `INGEST_CORE__API_URL` defaults to `http://pagermon:3000`
+- `INGEST_CORE__API_URL` + `INGEST_CORE__API_KEY` (or `INGEST_CORE__API_KEY_FILE`) map to target `1`
+- `INGEST_CORE__API_NAME` + `INGEST_CORE__API_<n>_NAME` provide stable target names for metrics labels
+- `INGEST_CORE__API_<n>_URL` + `INGEST_CORE__API_<n>_KEY` (or `INGEST_CORE__API_<n>_KEY_FILE`) map to target `n`
+- alias and enumerated variables can be combined
+- for each target, `KEY` and `KEY_FILE` must not be defined at the same time
 - `INGEST_CORE__REDIS_URL` defaults to `redis://redis:6379`
 - `INGEST_CORE__LABEL` defaults to `pagermon-ingest`
 
 Core requires:
 
-- `INGEST_CORE__API_KEY`
+- at least one complete API target (URL + key or key file)
 
 ### Logging
 
@@ -784,23 +799,29 @@ Core settings (`INGEST_CORE__*`) are parsed and validated by ingest-core.
 
 ### Core Variables
 
-| Variable                                  | Required | Default                   | Description                                                                    |
-| ----------------------------------------- | -------- | ------------------------- | ------------------------------------------------------------------------------ |
-| `INGEST_CORE__API_URL`                    | no       | `http://pagermon:3000`    | PagerMon API base URL used by ingest worker; defaults when variable is not set |
-| `INGEST_CORE__API_KEY`                    | yes      | none                      | API key for authenticated message submission                                   |
-| `INGEST_CORE__LABEL`                      | no       | `pagermon-ingest`         | Default message source label when adapter omits `metadata.source`              |
-| `INGEST_CORE__REDIS_URL`                  | no       | `redis://redis:6379`      | Redis connection string for queue storage                                      |
-| `INGEST_CORE__ENABLE_DLQ`                 | no       | `true`                    | Enables dead-letter queue for permanently failed jobs                          |
-| `INGEST_CORE__HEALTH_CHECK_INTERVAL`      | no       | `10000`                   | Interval in ms for PagerMon health checks                                      |
-| `INGEST_CORE__HEALTH_UNHEALTHY_THRESHOLD` | no       | `3`                       | Failed health checks before service is marked unhealthy                        |
-| `INGEST_CORE__ADAPTER_ENTRY`              | no       | `/app/adapter/adapter.js` | Adapter module path used in loader mode                                        |
-| `INGEST_CORE__METRICS_ENABLED`            | no       | `false`                   | Expose metrics endpoint over HTTP                                              |
-| `INGEST_CORE__METRICS_PORT`               | no       | `9464`                    | Metrics HTTP port                                                              |
-| `INGEST_CORE__METRICS_HOST`               | no       | `0.0.0.0`                 | Metrics bind host                                                              |
-| `INGEST_CORE__METRICS_PATH`               | no       | `/metrics`                | Metrics endpoint path                                                          |
-| `INGEST_CORE__METRICS_PREFIX`             | no       | `pagermon_ingest_`        | Prefix prepended to all exported metric names                                  |
-| `INGEST_CORE__METRICS_COLLECT_DEFAULT`    | no       | `true`                    | Collect default Node.js process metrics                                        |
-| `INGEST_CORE__METRICS_DEFAULT_LABELS`     | no       | empty                     | Comma-separated labels (`key=value,key2=value2`) parsed by core                |
+| Variable                                  | Required    | Default                   | Description                                                       |
+| ----------------------------------------- | ----------- | ------------------------- | ----------------------------------------------------------------- |
+| `INGEST_CORE__API_URL`                    | conditional | none                      | PagerMon API URL alias for target `1`                             |
+| `INGEST_CORE__API_NAME`                   | no          | `target-1`                | Stable metrics label name for target `1`                          |
+| `INGEST_CORE__API_KEY`                    | conditional | none                      | API key alias for target `1`                                      |
+| `INGEST_CORE__API_KEY_FILE`               | conditional | none                      | Docker secret file path alias for target `1` API key              |
+| `INGEST_CORE__API_<n>_URL`                | conditional | none                      | Enumerated PagerMon API URL for target `n`                        |
+| `INGEST_CORE__API_<n>_NAME`               | no          | `target-<n>`              | Stable metrics label name for target `n`                          |
+| `INGEST_CORE__API_<n>_KEY`                | conditional | none                      | Enumerated API key for target `n`                                 |
+| `INGEST_CORE__API_<n>_KEY_FILE`           | conditional | none                      | Enumerated Docker secret file path for target `n` API key         |
+| `INGEST_CORE__LABEL`                      | no          | `pagermon-ingest`         | Default message source label when adapter omits `metadata.source` |
+| `INGEST_CORE__REDIS_URL`                  | no          | `redis://redis:6379`      | Redis connection string for queue storage                         |
+| `INGEST_CORE__ENABLE_DLQ`                 | no          | `true`                    | Enables dead-letter queue for permanently failed jobs             |
+| `INGEST_CORE__HEALTH_CHECK_INTERVAL`      | no          | `10000`                   | Interval in ms for PagerMon health checks                         |
+| `INGEST_CORE__HEALTH_UNHEALTHY_THRESHOLD` | no          | `3`                       | Failed health checks before service is marked unhealthy           |
+| `INGEST_CORE__ADAPTER_ENTRY`              | no          | `/app/adapter/adapter.js` | Adapter module path used in loader mode                           |
+| `INGEST_CORE__METRICS_ENABLED`            | no          | `false`                   | Expose metrics endpoint over HTTP                                 |
+| `INGEST_CORE__METRICS_PORT`               | no          | `9464`                    | Metrics HTTP port                                                 |
+| `INGEST_CORE__METRICS_HOST`               | no          | `0.0.0.0`                 | Metrics bind host                                                 |
+| `INGEST_CORE__METRICS_PATH`               | no          | `/metrics`                | Metrics endpoint path                                             |
+| `INGEST_CORE__METRICS_PREFIX`             | no          | `pagermon_ingest_`        | Prefix prepended to all exported metric names                     |
+| `INGEST_CORE__METRICS_COLLECT_DEFAULT`    | no          | `true`                    | Collect default Node.js process metrics                           |
+| `INGEST_CORE__METRICS_DEFAULT_LABELS`     | no          | empty                     | Comma-separated labels (`key=value,key2=value2`) parsed by core   |
 
 ### Adapter Variables
 

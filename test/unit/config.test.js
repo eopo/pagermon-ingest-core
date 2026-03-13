@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 const configModulePath = new URL('../../lib/config.js', import.meta.url).href;
 
 function loadConfigWithEnv(envPatch) {
@@ -21,6 +24,7 @@ function loadConfigWithEnv(envPatch) {
 describe('config', () => {
   it('forwards adapter values from INGEST_ADAPTER__ as structured config', async () => {
     const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
       INGEST_CORE__API_KEY: 'abc123',
       INGEST_ADAPTER__FREQUENCIES: '152.405,152.415',
       INGEST_ADAPTER__PROTOCOLS: 'POCSAG512,POCSAG1200',
@@ -38,6 +42,7 @@ describe('config', () => {
 
   it('uses sane fallbacks for invalid numeric env values', async () => {
     const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
       INGEST_CORE__API_KEY: 'abc123',
       INGEST_CORE__HEALTH_CHECK_INTERVAL: 'invalid',
       INGEST_CORE__HEALTH_UNHEALTHY_THRESHOLD: '',
@@ -51,7 +56,7 @@ describe('config', () => {
     expect(config.adapterConfig.gain).toBe('NaN');
   });
 
-  it('validate() exits process when API key is missing', async () => {
+  it('validate() exits process when no API target configuration is present', async () => {
     const { default: config } = await loadConfigWithEnv({
       INGEST_ADAPTER__FREQUENCIES: '152.405',
       INGEST_ADAPTER__PROTOCOLS: 'POCSAG1200',
@@ -66,8 +71,136 @@ describe('config', () => {
     exitSpy.mockRestore();
   });
 
+  it('parses target-1 from INGEST_CORE__API_URL and INGEST_CORE__API_KEY', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
+      INGEST_CORE__API_NAME: 'pm-prod-a',
+      INGEST_CORE__API_KEY: 'key-a',
+    });
+
+    expect(config.apiTargets).toEqual([
+      { id: 'target-1', name: 'pm-prod-a', url: 'http://api-a:3000', apiKey: 'key-a' },
+    ]);
+  });
+
+  it('parses enumerated targets from INGEST_CORE__API_<n>_URL and INGEST_CORE__API_<n>_KEY', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_1_URL: 'http://api-a:3000',
+      INGEST_CORE__API_1_NAME: 'pm-prod-a',
+      INGEST_CORE__API_1_KEY: 'key-a',
+      INGEST_CORE__API_2_URL: 'http://api-b:3000',
+      INGEST_CORE__API_2_NAME: 'pm-prod-b',
+      INGEST_CORE__API_2_KEY: 'key-b',
+    });
+
+    expect(config.apiTargets).toHaveLength(2);
+    expect(config.apiTargets[0]).toEqual({
+      id: 'target-1',
+      name: 'pm-prod-a',
+      url: 'http://api-a:3000',
+      apiKey: 'key-a',
+    });
+    expect(config.apiTargets[1]).toEqual({
+      id: 'target-2',
+      name: 'pm-prod-b',
+      url: 'http://api-b:3000',
+      apiKey: 'key-b',
+    });
+  });
+
+  it('combines API_URL/API_KEY with enumerated API_<n> variables without mode switching', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
+      INGEST_CORE__API_KEY: 'key-a',
+      INGEST_CORE__API_2_URL: 'http://api-b:3000',
+      INGEST_CORE__API_2_KEY: 'key-b',
+    });
+
+    expect(config.apiTargets).toEqual([
+      { id: 'target-1', name: 'target-1', url: 'http://api-a:3000', apiKey: 'key-a' },
+      { id: 'target-2', name: 'target-2', url: 'http://api-b:3000', apiKey: 'key-b' },
+    ]);
+  });
+
+  it('supports Docker secrets via INGEST_CORE__API_KEY_FILE for single target', async () => {
+    const secretPath = path.join(os.tmpdir(), `ingest-core-key-${Date.now()}-${Math.random()}.txt`);
+    fs.writeFileSync(secretPath, 'secret-from-file\n', 'utf8');
+
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
+      INGEST_CORE__API_KEY_FILE: secretPath,
+    });
+
+    expect(config.apiTargets).toEqual([
+      { id: 'target-1', name: 'target-1', url: 'http://api-a:3000', apiKey: 'secret-from-file' },
+    ]);
+    fs.unlinkSync(secretPath);
+  });
+
+  it('supports Docker secrets via INGEST_CORE__API_<n>_KEY_FILE for enumerated targets', async () => {
+    const secretPath = path.join(os.tmpdir(), `ingest-core-key-n-${Date.now()}-${Math.random()}.txt`);
+    fs.writeFileSync(secretPath, 'secret-two\n', 'utf8');
+
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_1_URL: 'http://api-a:3000',
+      INGEST_CORE__API_1_KEY: 'key-a',
+      INGEST_CORE__API_2_URL: 'http://api-b:3000',
+      INGEST_CORE__API_2_KEY_FILE: secretPath,
+    });
+
+    expect(config.apiTargets).toEqual([
+      { id: 'target-1', name: 'target-1', url: 'http://api-a:3000', apiKey: 'key-a' },
+      { id: 'target-2', name: 'target-2', url: 'http://api-b:3000', apiKey: 'secret-two' },
+    ]);
+    fs.unlinkSync(secretPath);
+  });
+
+  it('validate() exits when KEY and KEY_FILE are both defined for the same target', async () => {
+    const secretPath = path.join(os.tmpdir(), `ingest-core-key-conflict-${Date.now()}-${Math.random()}.txt`);
+    fs.writeFileSync(secretPath, 'from-file\n', 'utf8');
+
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
+      INGEST_CORE__API_KEY: 'from-env',
+      INGEST_CORE__API_KEY_FILE: secretPath,
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+    config.validate();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    exitSpy.mockRestore();
+    fs.unlinkSync(secretPath);
+  });
+
+  it('validate() exits when KEY_FILE cannot be read', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
+      INGEST_CORE__API_KEY_FILE: '/tmp/this-file-does-not-exist-ingest-core-secret',
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+    config.validate();
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    exitSpy.mockRestore();
+  });
+
+  it('validate() succeeds with single target API_URL/API_KEY', async () => {
+    const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
+      INGEST_CORE__API_KEY: 'key-a',
+    });
+
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined);
+
+    config.validate();
+
+    expect(exitSpy).not.toHaveBeenCalled();
+    exitSpy.mockRestore();
+  });
+
   it('parses metrics configuration from environment', async () => {
     const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
       INGEST_CORE__API_KEY: 'abc123',
       INGEST_CORE__METRICS_ENABLED: 'true',
       INGEST_CORE__METRICS_PORT: '9090',
@@ -87,6 +220,7 @@ describe('config', () => {
 
   it('uses sane defaults for metrics configuration', async () => {
     const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
       INGEST_CORE__API_KEY: 'abc123',
     });
 
@@ -100,6 +234,7 @@ describe('config', () => {
 
   it('parses metrics default labels from CSV', async () => {
     const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
       INGEST_CORE__API_KEY: 'abc123',
       INGEST_CORE__METRICS_DEFAULT_LABELS: 'env=prod,service=ingest,region=eu',
     });
@@ -114,6 +249,7 @@ describe('config', () => {
 
   it('buildMetricsConfig returns correct structure', async () => {
     const { default: config } = await loadConfigWithEnv({
+      INGEST_CORE__API_URL: 'http://api-a:3000',
       INGEST_CORE__API_KEY: 'abc123',
       INGEST_CORE__METRICS_ENABLED: 'true',
       INGEST_CORE__METRICS_PREFIX: 'test_',

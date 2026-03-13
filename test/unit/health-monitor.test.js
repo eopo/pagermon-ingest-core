@@ -26,12 +26,14 @@ describe('HealthMonitor', () => {
     await monitor.perform();
     expect(monitor.isHealthy).toBe(true);
     expect(monitor.failureCount).toBe(1);
+    expect(healthGauge.labels).toHaveBeenLastCalledWith({ target_name: 'default' });
     expect(healthGauge.set).toHaveBeenLastCalledWith(1);
     expect(failureCounter.inc).not.toHaveBeenCalled();
 
     await monitor.perform();
     expect(monitor.isHealthy).toBe(false);
     expect(monitor.failureCount).toBe(2);
+    expect(healthGauge.labels).toHaveBeenLastCalledWith({ target_name: 'default' });
     expect(healthGauge.set).toHaveBeenLastCalledWith(0);
     expect(onCheck).toHaveBeenCalledTimes(2);
     expect(onHealthChange).toHaveBeenCalledTimes(1);
@@ -60,6 +62,7 @@ describe('HealthMonitor', () => {
     await monitor.perform();
     expect(monitor.isHealthy).toBe(false);
     expect(monitor.failureCount).toBe(1);
+    expect(failureCounter.labels).toHaveBeenLastCalledWith({ target_name: 'default' });
     expect(failureCounter.inc).toHaveBeenCalledTimes(1);
   });
 
