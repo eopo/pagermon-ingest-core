@@ -94,7 +94,7 @@ Contributions that touch adapter startup/config should follow the current logger
 - Adapters create their own scoped children via `config.logger.child({...})`.
 - Do not re-introduce adapter-specific logger helpers in adapter config.
 
-For tests, use the central helper from `lib/runtime/logger.js`:
+For tests, use the central helper from `@pagermon/ingest-core/testing`, which is made available via `test/helpers/index.js`:
 
 - `createMockLogger(vi)` for spy-enabled logger assertions.
 - `createMockLogger()` (or `createMockLogger(null)`) for no-op logger behavior.
