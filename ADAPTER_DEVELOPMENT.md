@@ -482,18 +482,18 @@ Source behavior:
 - if `metadata.source` is empty or missing, core defaults source to `INGEST_CORE__LABEL`
 - no top-level `source` input field is used for source resolution
 
-For `alpha`, provide non-empty `message`.
+For `alpha` and `numeric`, provide non-empty `message`.
 
 Message field reference:
 
-| Field       | Required | Type     | Notes                                                         |
-| ----------- | -------- | -------- | ------------------------------------------------------------- |
-| `address`   | yes      | `string` | receiver/capcode                                              |
-| `message`   | no       | `string` | required only if resolved format is `alpha`                   |
-| `format`    | no       | `string` | resolved from `format`/`metadata.format`/fallback inference   |
-| `timestamp` | no       | `number` | unix timestamp in seconds                                     |
-| `time`      | no       | `string` | ISO8601 timestamp                                             |
-| `metadata`  | no       | `object` | protocol-specific fields; includes optional `metadata.source` |
+| Field       | Required | Type     | Notes                                                                            |
+| ----------- | -------- | -------- | -------------------------------------------------------------------------------- |
+| `address`   | yes      | `string` | receiver/capcode                                                                 |
+| `message`   | no       | `string` | required only if resolved format is `alpha` or `numeric`                         |
+| `format`    | yes      | `string` | resolved from `format`/`metadata.format`; missing/invalid formats cause an error |
+| `timestamp` | no       | `number` | unix timestamp in seconds                                                        |
+| `time`      | no       | `string` | ISO8601 timestamp                                                                |
+| `metadata`  | no       | `object` | protocol-specific fields; includes optional `metadata.source`                    |
 
 Validate before emit when your parser receives untrusted input:
 
