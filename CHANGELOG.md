@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/eopo/pagermon-ingest-core/compare/1.5.0...1.6.0) (2026-03-19)
+
+
+### Features
+
+* format changes ([4b83693](https://github.com/eopo/pagermon-ingest-core/commit/4b83693235c900a6a18513973cf57d08b8fa27e9))
+
 ## [1.5.0](https://github.com/eopo/pagermon-ingest-core/compare/1.4.0...1.5.0) (2026-03-13)
 
 
