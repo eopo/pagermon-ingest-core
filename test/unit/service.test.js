@@ -22,7 +22,7 @@ function buildServiceMocks({ queueInitReject = null, triggerOnError = false } = 
     initialize: vi.fn(() => Promise.resolve()),
     shutdown: vi.fn(() => Promise.resolve()),
     startReadingMessages: vi.fn(async (onMessage, onClose, onError) => {
-      const message = { address: '123', metadata: { source: 'old-source' } };
+      const message = { address: '123', format: 'numeric', message: '123', metadata: { source: 'old-source' } };
       await onMessage(message);
 
       if (triggerOnError) {
@@ -164,7 +164,7 @@ describe('runService', () => {
 
     const { runService, services } = await loadRunService();
     services.orchestrator.startReadingMessages = vi.fn(async (onMessage) => {
-      await onMessage({ address: '123' });
+      await onMessage({ address: '123', format: 'tone' });
     });
 
     await runService();
@@ -186,7 +186,7 @@ describe('runService', () => {
 
     const { runService, services } = await loadRunService();
     services.orchestrator.startReadingMessages = vi.fn(async (onMessage) => {
-      await onMessage({ address: '123', source: 'legacy-source' });
+      await onMessage({ address: '123', source: 'legacy-source', format: 'tone' });
     });
 
     await runService();
@@ -198,7 +198,7 @@ describe('runService', () => {
     exitSpy.mockRestore();
   });
 
-  it('infers alpha format for raw adapter objects with message text', async () => {
+  it('preserves tone format for raw adapter objects without message text', async () => {
     const onListeners = {};
     const onSpy = vi.spyOn(process, 'on').mockImplementation((event, cb) => {
       onListeners[event] = cb;
@@ -208,13 +208,13 @@ describe('runService', () => {
 
     const { runService, services } = await loadRunService();
     services.orchestrator.startReadingMessages = vi.fn(async (onMessage) => {
-      await onMessage({ address: '123', message: 'HELLO' });
+      await onMessage({ address: '123', message: '', format: 'tone' });
     });
 
     await runService();
 
     const [queuedMessage] = services.queue.addMessage.mock.calls[0];
-    expect(queuedMessage.format).toBe('alpha');
+    expect(queuedMessage.format).toBe('tone');
     expect(queuedMessage.source).toBe('test-label');
 
     onSpy.mockRestore();
@@ -260,7 +260,7 @@ describe('runService', () => {
     });
 
     services.orchestrator.startReadingMessages = vi.fn(async (onMessage) => {
-      await onMessage({ address: '123', message: 'HELLO', metadata: { source: 'sdr-a' } });
+      await onMessage({ address: '123', message: 'HELLO', format: 'alpha', metadata: { source: 'sdr-a' } });
     });
 
     await runService();

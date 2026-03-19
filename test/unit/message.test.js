@@ -19,17 +19,17 @@ describe('Message', () => {
     expect(payload.source).toBe('test-source');
   });
 
-  it('infers alpha format when message text exists and no explicit format is provided', () => {
-    const msg = new Message({
-      address: '123456',
-      message: 'Hello PagerMon',
-    });
-
-    expect(msg.format).toBe('alpha');
-    expect(msg.validate().valid).toBe(true);
+  it('rejects when explicit format is not provided', () => {
+    expect(
+      () =>
+        new Message({
+          address: '123456',
+          message: 'Hello PagerMon',
+        })
+    ).toThrow('Message format must be explicitly defined');
   });
 
-  it('preserves falsy numeric message values like 0', () => {
+  it('preserves falsy text values like 0 for alpha messages', () => {
     const msg = new Message({
       address: '123456',
       message: 0,
@@ -41,10 +41,10 @@ describe('Message', () => {
     expect(msg.validate().valid).toBe(true);
   });
 
-  it('allows numeric message without text', () => {
+  it('allows tone message without text', () => {
     const msg = new Message({
       address: '98765',
-      format: 'numeric',
+      format: 'tone',
     });
 
     expect(msg.message).toBe('');
@@ -70,7 +70,8 @@ describe('Message', () => {
     const msg = new Message({
       address: '98765',
       message: '42',
-      metadata: { source: 'decoder-a', format: 'numeric' },
+      format: 'numeric',
+      metadata: { source: 'decoder-a' },
     });
 
     const payload = msg.toPayload();
@@ -82,7 +83,7 @@ describe('Message', () => {
       address: '98765',
       message: '42',
       format: 'numeric',
-      metadata: { source: 'meta-source', format: 'alpha', protocol: 'FLEX1600' },
+      metadata: { source: 'meta-source', protocol: 'FLEX1600' },
     });
 
     const payload = msg.toPayload();
@@ -94,6 +95,7 @@ describe('Message', () => {
   it('emits empty source in payload when metadata.source is omitted', () => {
     const msg = new Message({
       address: '98765',
+      message: 'test',
       format: 'numeric',
     });
 
@@ -110,22 +112,25 @@ describe('Message', () => {
           format: 'alpha',
           metadata: { source: 'test-source' },
         })
-    ).toThrow('Alpha message requires message content');
+    ).toThrow('alpha message requires message content');
+  });
+
+  it('rejects numeric message without text', () => {
+    expect(
+      () =>
+        new Message({
+          address: '11111',
+          format: 'numeric',
+          metadata: { source: 'test-source' },
+        })
+    ).toThrow('numeric message requires message content');
   });
 
   it('rejects missing required base fields', () => {
-    expect(() => new Message({ format: 'numeric', source: 'x' })).toThrow('Message requires address');
+    expect(() => new Message({ format: 'numeric', message: 'test', source: 'x' })).toThrow('Message requires address');
   });
 
-  it('infers numeric format when neither message nor explicit format is provided', () => {
-    const msg = new Message({ address: '1' });
-
-    expect(msg.format).toBe('numeric');
-    expect(msg.message).toBe('');
-    expect(msg.validate().valid).toBe(true);
-  });
-
-  it('reports validation errors for whitespace address and invalid format', () => {
+  it('reports validation errors for whitespace address and empty text via update', () => {
     const msg = new Message({
       address: '123',
       message: 'foo',
@@ -143,10 +148,10 @@ describe('Message', () => {
 
     msg.address = '123';
     msg.message = 'ok';
-    msg.format = 'binary';
+    msg.format = '';
 
     const formatResult = msg.validate();
     expect(formatResult.valid).toBe(false);
-    expect(formatResult.errors).toContain('invalid format: binary');
+    expect(formatResult.errors).toContain('format is required');
   });
 });
