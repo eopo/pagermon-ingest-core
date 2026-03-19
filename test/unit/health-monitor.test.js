@@ -99,4 +99,17 @@ describe('HealthMonitor', () => {
     expect(status.failureCount).toBe(0);
     expect(status.lastCheck).toBeInstanceOf(Date);
   });
+
+  it('marks unhealthy and executes catch block callbacks on error', async () => {
+    const apiClient = { checkHealth: vi.fn().mockRejectedValue(new Error('timeout')) };
+    const metrics = createMockMetrics();
+    const monitor = new HealthMonitor({ apiClient }, { unhealthyThreshold: 1, metrics });
+
+    const onHealthChange = vi.fn();
+    monitor.on('healthChange', onHealthChange);
+
+    await monitor.perform();
+    expect(monitor.isHealthy).toBe(false);
+    expect(onHealthChange).toHaveBeenCalledWith(expect.objectContaining({ healthy: false }));
+  });
 });

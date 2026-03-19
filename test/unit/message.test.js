@@ -26,7 +26,7 @@ describe('Message', () => {
           address: '123456',
           message: 'Hello PagerMon',
         })
-    ).toThrow('Message format must be explicitly defined');
+    ).toThrow('Message format must be one of: alpha, numeric, tone');
   });
 
   it('preserves falsy text values like 0 for alpha messages', () => {
@@ -152,6 +152,17 @@ describe('Message', () => {
 
     const formatResult = msg.validate();
     expect(formatResult.valid).toBe(false);
-    expect(formatResult.errors).toContain('format is required');
+    expect(formatResult.errors).toContain('format must be one of: alpha, numeric, tone');
+  });
+
+  it('rejects an invalid format like gpn', () => {
+    expect(
+      () =>
+        new Message({
+          address: '123456',
+          message: 'Hello PagerMon',
+          format: 'gpn',
+        })
+    ).toThrow('Message format must be one of: alpha, numeric, tone');
   });
 });

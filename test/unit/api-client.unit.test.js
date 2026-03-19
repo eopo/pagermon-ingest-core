@@ -146,4 +146,22 @@ describe('ApiClient unit behavior', () => {
     expect(result.status).toBe('ok');
     expect(httpsRequestMock).toHaveBeenCalledTimes(1);
   });
+
+  it('throws NetworkError on underlying request errors', async () => {
+    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' });
+    queueScenario({ error: new Error('ECONNREFUSED') });
+
+    await expect(client._request('GET', '/api/test')).rejects.toMatchObject({
+      name: 'NetworkError',
+      retryable: true,
+      message: 'Network error: ECONNREFUSED',
+    });
+  });
+
+  it('rejects correctly when JSON parsing fails for API responses', async () => {
+    const client = new ApiClient({ url: 'http://localhost:3000', apiKey: 'k' });
+    queueScenario({ statusCode: 200, data: 'not-json' });
+
+    await expect(client._request('GET', '/api/test')).rejects.toThrow(SyntaxError);
+  });
 });
