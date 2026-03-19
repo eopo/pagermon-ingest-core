@@ -193,4 +193,36 @@ describe('QueueManager', () => {
     expect(manager.connection).toBe(null);
     expect(manager.workerConnection).toBe(null);
   });
+
+  it('decrements queue depth gauge on completing or failing finally', async () => {
+    const mockMetrics = createMockMetrics();
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: mockMetrics });
+    manager.initialize();
+
+    const processor = vi.fn(() => Promise.resolve('ok'));
+    manager.startProcessing(processor);
+
+    const worker = workerInstances[0];
+    const gauge = mockMetrics.gauge.mock.results[0].value;
+
+    // Test the processor forwards correctly
+    const job = { id: 'x', attemptsMade: 1, opts: { attempts: 1 } };
+    const result = await worker.processor(job);
+    expect(result).toBe('ok');
+    expect(processor).toHaveBeenCalledWith(job);
+
+    // completed event
+    worker.handlers.completed(job);
+    expect(gauge.dec).toHaveBeenCalledTimes(1);
+
+    // failed event where attempts limit is reached
+    worker.handlers.failed(job);
+    expect(gauge.dec).toHaveBeenCalledTimes(2);
+
+    // failed event where attempts limit not reached
+    job.opts.attempts = 3;
+    worker.handlers.failed(job);
+    // Gauge should not be decremented again
+    expect(gauge.dec).toHaveBeenCalledTimes(2);
+  });
 });

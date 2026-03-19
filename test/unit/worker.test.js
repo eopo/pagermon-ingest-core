@@ -193,4 +193,53 @@ describe('Worker', () => {
     const result = await worker._processMessage({ id: '3', data: { address: '111', targetId: 'target-a' } });
     expect(result).toEqual({ ok: true });
   });
+
+  it('initializes queue in start if not already initialized', async () => {
+    const { queue, apiClients, healthByTarget, targetNamesById, metrics } = createWorkerDeps();
+
+    // Simulate uninitialized queue
+    queue.queue = null;
+    queue.initialize = vi.fn().mockResolvedValue();
+
+    const worker = new Worker({ queue, apiClients, healthByTarget, targetNamesById, metrics });
+
+    await worker.start();
+
+    expect(queue.initialize).toHaveBeenCalledTimes(1);
+    expect(queue.startProcessing).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects message permanently if explicit targetId is not configured', async () => {
+    const { queue, apiClients, healthByTarget, targetNamesById, metrics } = createWorkerDeps();
+    const worker = new Worker({ queue, apiClients, healthByTarget, targetNamesById, metrics });
+
+    const cb = vi.fn();
+    worker.on('messageFailed', cb);
+
+    const result = await worker._processMessage({
+      id: 'bad-target-job',
+      data: { address: '999', targetId: 'does-not-exist' },
+    });
+
+    expect(result).toBeUndefined(); // worker catches non-retryable errors
+    expect(cb).toHaveBeenCalledWith(
+      expect.objectContaining({ error: 'No ApiClient configured for targetId=does-not-exist' })
+    );
+    expect(cb.mock.calls[0][0].retryable).toBe(false);
+  });
+
+  it('throws retryable error if default targetId is not configured', async () => {
+    const { queue, healthByTarget, targetNamesById, metrics } = createWorkerDeps();
+
+    // Simulate no default client configured
+    const emptyApiClients = {};
+    const worker = new Worker({ queue, apiClients: emptyApiClients, healthByTarget, targetNamesById, metrics });
+
+    const cb = vi.fn();
+    worker.on('messageFailed', cb);
+
+    await expect(worker._processMessage({ id: 'default-target-job', data: { address: '999' } })).rejects.toThrow(
+      'No ApiClient configured for targetId=default'
+    );
+  });
 });
