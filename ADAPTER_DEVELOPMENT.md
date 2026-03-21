@@ -438,21 +438,23 @@ import { Message } from '@pagermon/ingest-core';
 Required fields:
 
 - `address` (string)
-- `message` (string, optional)
-- `format` (`alpha` or `numeric`, optional)
+- `message` (string, required for `alpha` and `numeric`, optional for `tone`)
+- `format` (`alpha`, `numeric`, or `tone`, required)
 - `source` (string, optional)
 
 `format` is a normalized PagerMon message class, not the radio/decoder protocol.
 
 - use `alpha` for alphanumeric/text pager messages
 - use `numeric` for numeric pager messages
+- use `tone` for tone-only pager messages without text content
 - keep protocol-specific information such as `POCSAG1200`, `POCSAG2400`, or `FLEX` in `metadata`
 
 Core format resolution order:
 
 1. `format` parameter (if provided)
 2. `metadata.format` (if provided)
-3. fallback inference: `alpha` if `message` is non-empty, otherwise `numeric`
+
+If no valid format ('alpha', 'numeric', or 'tone') is provided, an error will be thrown.
 
 Use explicit `format` or `metadata.format` when your adapter can determine the semantic message type from protocol context.
 
@@ -480,18 +482,18 @@ Source behavior:
 - if `metadata.source` is empty or missing, core defaults source to `INGEST_CORE__LABEL`
 - no top-level `source` input field is used for source resolution
 
-For `alpha`, provide non-empty `message`.
+For `alpha` and `numeric`, provide non-empty `message`.
 
 Message field reference:
 
-| Field       | Required | Type     | Notes                                                         |
-| ----------- | -------- | -------- | ------------------------------------------------------------- |
-| `address`   | yes      | `string` | receiver/capcode                                              |
-| `message`   | no       | `string` | required only if resolved format is `alpha`                   |
-| `format`    | no       | `string` | resolved from `format`/`metadata.format`/fallback inference   |
-| `timestamp` | no       | `number` | unix timestamp in seconds                                     |
-| `time`      | no       | `string` | ISO8601 timestamp                                             |
-| `metadata`  | no       | `object` | protocol-specific fields; includes optional `metadata.source` |
+| Field       | Required | Type     | Notes                                                                            |
+| ----------- | -------- | -------- | -------------------------------------------------------------------------------- |
+| `address`   | yes      | `string` | receiver/capcode                                                                 |
+| `message`   | no       | `string` | required only if resolved format is `alpha` or `numeric`                         |
+| `format`    | yes      | `string` | resolved from `format`/`metadata.format`; missing/invalid formats cause an error |
+| `timestamp` | no       | `number` | unix timestamp in seconds                                                        |
+| `time`      | no       | `string` | ISO8601 timestamp                                                                |
+| `metadata`  | no       | `object` | protocol-specific fields; includes optional `metadata.source`                    |
 
 Validate before emit when your parser receives untrusted input:
 
