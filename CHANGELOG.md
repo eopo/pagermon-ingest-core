@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.2](https://github.com/eopo/pagermon-ingest-core/compare/v1.6.1...v1.6.2) (2026-04-21)
+
+
+### Dependencies
+
+* **app:** bump the npm-runtime group with 3 updates ([#60](https://github.com/eopo/pagermon-ingest-core/issues/60)) ([9e6c3c6](https://github.com/eopo/pagermon-ingest-core/commit/9e6c3c629dfa89564b11be96ffbaea931ce434a6))
+* **app:** bump the npm-tooling group with 10 updates ([#62](https://github.com/eopo/pagermon-ingest-core/issues/62)) ([bba1e27](https://github.com/eopo/pagermon-ingest-core/commit/bba1e27b1239546103e2227c8131bd602f9849f7))
+
 ## [1.6.1](https://github.com/eopo/pagermon-ingest-core/compare/1.6.0...v1.6.1) (2026-04-21)
 
 
