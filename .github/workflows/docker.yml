@@ -28,7 +28,7 @@ jobs:
 
       - name: Docker meta (Docker Hub)
         id: meta-dockerhub
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.DOCKERHUB_IMAGE }}
           tags: |
@@ -39,7 +39,7 @@ jobs:
 
       - name: Docker meta (GHCR)
         id: meta-ghcr
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.GHCR_IMAGE }}
           tags: |
