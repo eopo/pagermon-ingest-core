@@ -1,34 +1,49 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
-    directory: "/"
+  - package-ecosystem: 'npm'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
+    groups:
+      npm-runtime:
+        dependency-type: 'production'
+      npm-tooling:
+        dependency-type: 'development'
+        patterns:
+          - '*'
     open-pull-requests-limit: 10
     commit-message:
-      prefix: "deps(app)"
+      prefix: 'deps(app)'
     labels:
-      - "dependencies"
-      - "dependabot"
+      - 'dependencies'
+      - 'dependabot'
 
-  - package-ecosystem: "docker"
-    directory: "/"
+  - package-ecosystem: 'docker'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
+    groups:
+      docker-images:
+        patterns:
+          - '*'
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "deps(docker)"
+      prefix: 'deps(docker)'
     labels:
-      - "dependencies"
-      - "dependabot"
+      - 'dependencies'
+      - 'dependabot'
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
+    groups:
+      github-actions:
+        patterns:
+          - '*'
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "ci"
+      prefix: 'ci'
     labels:
-      - "dependencies"
-      - "dependabot"
+      - 'dependencies'
+      - 'dependabot'
