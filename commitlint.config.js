@@ -23,6 +23,7 @@ export default {
         'ci', // CI/CD changes
         'chore', // Maintenance tasks
         'revert', // Revert previous commit
+        'deps', // Dependency Updates
       ],
     ],
     'subject-case': [2, 'never', ['upper-case']], // No UPPERCASE subjects
