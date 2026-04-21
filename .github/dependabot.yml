@@ -4,7 +4,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    target-branch: "dev"
     open-pull-requests-limit: 10
     commit-message:
       prefix: "deps(app)"
@@ -16,7 +15,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    target-branch: "dev"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps(docker)"
@@ -28,7 +26,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    target-branch: "dev"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "ci"
