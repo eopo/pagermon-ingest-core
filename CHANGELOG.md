@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/eopo/pagermon-ingest-core/compare/1.6.0...v1.6.1) (2026-04-21)
+
+
+### Continuous Integration
+
+* add deps as valid commit type ([931a931](https://github.com/eopo/pagermon-ingest-core/commit/931a931a5d923c31ce34b0bb13928885a8bc97c4))
+
 ## [1.6.0](https://github.com/eopo/pagermon-ingest-core/compare/1.5.0...1.6.0) (2026-03-19)
 
 
