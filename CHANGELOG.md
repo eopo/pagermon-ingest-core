@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.3](https://github.com/eopo/pagermon-ingest-core/compare/v1.6.2...v1.6.3) (2026-07-02)
+
+
+### Dependencies
+
+* **app:** bump fast-uri from 3.1.0 to 3.1.2 ([#71](https://github.com/eopo/pagermon-ingest-core/issues/71)) ([66ddc14](https://github.com/eopo/pagermon-ingest-core/commit/66ddc14cb08481b5da036fd30c459592c64b7500))
+* **app:** bump js-yaml from 4.1.1 to 4.3.0 ([#82](https://github.com/eopo/pagermon-ingest-core/issues/82)) ([5444449](https://github.com/eopo/pagermon-ingest-core/commit/5444449457fdc3594f9487622c9dfba44f9917bd))
+* **app:** bump the npm-runtime group across 1 directory with 2 updates ([#75](https://github.com/eopo/pagermon-ingest-core/issues/75)) ([9af0b78](https://github.com/eopo/pagermon-ingest-core/commit/9af0b781ad80f87797dc0b82bfa7e785ffef7306))
+* **app:** bump the npm-tooling group across 1 directory with 10 updates ([#79](https://github.com/eopo/pagermon-ingest-core/issues/79)) ([bb39a0d](https://github.com/eopo/pagermon-ingest-core/commit/bb39a0daf522e061b3db1a5dc15f49ca839d7741))
+* **app:** bump uuid and bullmq ([#69](https://github.com/eopo/pagermon-ingest-core/issues/69)) ([8c64cd6](https://github.com/eopo/pagermon-ingest-core/commit/8c64cd63671545d4f715644f0f09c3388f8aac53))
+* **docker:** bump node in the docker-images group across 1 directory ([#72](https://github.com/eopo/pagermon-ingest-core/issues/72)) ([b032d2b](https://github.com/eopo/pagermon-ingest-core/commit/b032d2b4be9b384f2a30002ca7ef30eaafa3e05e))
+
 ## [1.6.2](https://github.com/eopo/pagermon-ingest-core/compare/v1.6.1...v1.6.2) (2026-04-21)
 
 
