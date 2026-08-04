@@ -56,8 +56,8 @@
     "npm": ">=9.0"
   },
   "dependencies": {
-    "bullmq": "^5.63.0",
-    "ioredis": "^5.8.2",
+    "bullmq": "^6.0.3",
+    "ioredis": "^6.0.0",
     "pino": "^10.3.1",
     "prom-client": "^15.1.0"
   },
