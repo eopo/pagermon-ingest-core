@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.4](https://github.com/eopo/pagermon-ingest-core/compare/v1.6.3...v1.6.4) (2026-09-10)
+
+
+### Dependencies
+
+* **app:** bump @humanfs/node from 0.16.7 to 0.16.8 ([#103](https://github.com/eopo/pagermon-ingest-core/issues/103)) ([215f8f8](https://github.com/eopo/pagermon-ingest-core/commit/215f8f8fe2cbd5d50fbc2c893a18a1937940e1a1))
+
 ## [1.6.3](https://github.com/eopo/pagermon-ingest-core/compare/v1.6.2...v1.6.3) (2026-07-02)
 
 
