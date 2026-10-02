@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.6.4](https://github.com/eopo/pagermon-ingest-core/compare/v1.6.3...v1.6.4) (2026-10-02)
+
+
+### Dependencies
+
+* **app:** bump @humanfs/node from 0.16.7 to 0.16.8 ([#103](https://github.com/eopo/pagermon-ingest-core/issues/103)) ([215f8f8](https://github.com/eopo/pagermon-ingest-core/commit/215f8f8fe2cbd5d50fbc2c893a18a1937940e1a1))
+* **app:** bump brace-expansion from 5.0.5 to 5.0.12 ([#107](https://github.com/eopo/pagermon-ingest-core/issues/107)) ([2122902](https://github.com/eopo/pagermon-ingest-core/commit/212290242665afd68b51f0350514e1dc43bb7182))
+* **app:** bump fast-uri from 3.1.7 to 3.1.8 ([#106](https://github.com/eopo/pagermon-ingest-core/issues/106)) ([b63a0a7](https://github.com/eopo/pagermon-ingest-core/commit/b63a0a7e8728c8305db4d3f3314b9358d0ea80c1))
+* **app:** bump postcss from 8.5.16 to 8.5.28 ([#102](https://github.com/eopo/pagermon-ingest-core/issues/102)) ([0d5e8d8](https://github.com/eopo/pagermon-ingest-core/commit/0d5e8d84b49475e9261ef8701f25f47953e2234e))
+* **app:** bump the npm-runtime group across 1 directory with 2 updates ([#96](https://github.com/eopo/pagermon-ingest-core/issues/96)) ([2f33705](https://github.com/eopo/pagermon-ingest-core/commit/2f3370557c027b3af5b047b5e3413685a95d0841))
+* **app:** bump the npm-tooling group across 1 directory with 9 updates ([#99](https://github.com/eopo/pagermon-ingest-core/issues/99)) ([1d00f47](https://github.com/eopo/pagermon-ingest-core/commit/1d00f4784c123cd750119023e9e0844f43e1b5a8))
+* **app:** bump vitest from 5.0.0 to 5.0.3 ([#108](https://github.com/eopo/pagermon-ingest-core/issues/108)) ([6b758ea](https://github.com/eopo/pagermon-ingest-core/commit/6b758ea7ed5651fb926e17b6a11180c6522bee2b))
+
 ## [1.6.3](https://github.com/eopo/pagermon-ingest-core/compare/v1.6.2...v1.6.3) (2026-07-02)
 
 
