@@ -66,13 +66,13 @@
     "@commitlint/config-conventional": "^21.2.0",
     "@eslint/js": "^10.0.0",
     "@evilmartians/lefthook": "^2.1.3",
-    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/coverage-v8": "^5.0.0",
     "eslint": "^10.0.3",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.2.1",
     "globals": "^17.5.0",
     "lint-staged": "^17.0.8",
     "prettier": "^3.4.2",
-    "vitest": "^4.0.18"
+    "vitest": "^5.0.0"
   }
 }
