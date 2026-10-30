@@ -12,6 +12,7 @@ vi.mock('bullmq', () => {
       this.options = options;
       this.add = vi.fn((_type, payload) => Promise.resolve({ id: 'job-1', data: payload }));
       this.getJobs = vi.fn(() => Promise.resolve([]));
+      this.getJob = vi.fn(() => Promise.resolve(null));
       this.count = vi.fn(() => Promise.resolve(3));
       this.close = vi.fn(() => Promise.resolve());
       queueInstances.push(this);
@@ -77,14 +78,14 @@ describe('QueueManager', () => {
     );
   });
 
-  it('initializes queue and dlq with defaults', () => {
+  it('initializes the queue with durable failed-job retention', () => {
     const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
     manager.initialize();
 
     expect(redisInstances).toHaveLength(1);
-    expect(queueInstances).toHaveLength(2);
+    expect(queueInstances).toHaveLength(1);
     expect(queueInstances[0].name).toBe('sdr-messages');
-    expect(queueInstances[1].name).toBe('sdr-messages-dlq');
+    expect(queueInstances[0].options.defaultJobOptions.removeOnFail).toBe(false);
   });
 
   it('adds message with Message-like payload and builds deterministic job id', async () => {
@@ -109,7 +110,7 @@ describe('QueueManager', () => {
     await expect(manager.addMessage({})).rejects.toThrow('Queue not initialized');
   });
 
-  it('returns empty dead letters when DLQ disabled', async () => {
+  it('retains failed jobs when automatic DLQ recovery is disabled', async () => {
     const manager = new QueueManager(
       { redisUrl: 'redis://localhost:6379' },
       { enableDLQ: false, metrics: createMockMetrics() }
@@ -118,36 +119,85 @@ describe('QueueManager', () => {
 
     const jobs = await manager.getDeadLetters(10);
     expect(jobs).toEqual([]);
+    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(0);
   });
 
   it('maps dead letter jobs with limit handling', async () => {
     const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
     manager.initialize();
 
-    queueInstances[1].getJobs.mockResolvedValue([
+    queueInstances[0].getJobs.mockResolvedValue([
       {
         id: 'a',
-        data: { x: 1 },
+        data: { x: 1, __ingestCoreFailure: { retryable: false } },
         failedReason: 'boom',
         attemptsMade: 2,
       },
     ]);
 
     const jobs = await manager.getDeadLetters(0);
-    expect(queueInstances[1].getJobs).toHaveBeenCalledWith(['failed'], 0, 0);
-    expect(jobs).toEqual([
+    expect(queueInstances[0].getJobs).not.toHaveBeenCalled();
+    expect(jobs).toEqual([]);
+
+    const deadLetters = await manager.getDeadLetters(10);
+    expect(queueInstances[0].getJobs).toHaveBeenCalledWith(['failed'], 0, 9);
+    expect(deadLetters).toEqual([
       {
         id: 'a',
         data: { x: 1 },
         failedReason: 'boom',
         attemptsMade: 2,
+        targetId: 'default',
+        retryable: false,
       },
     ]);
+  });
+
+  it('replays only retryable failed jobs for the requested target', async () => {
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
+    manager.initialize();
+    const retryA = vi.fn();
+    const retryB = vi.fn();
+    queueInstances[0].getJobs.mockResolvedValue([
+      { id: 'a', data: { targetId: 'target-a' }, retry: retryA },
+      { id: 'b', data: { targetId: 'target-b' }, retry: retryB },
+      { id: 'c', data: { targetId: 'target-a', __ingestCoreFailure: { retryable: false } }, retry: vi.fn() },
+    ]);
+
+    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(1);
+    expect(retryA).toHaveBeenCalledWith('failed', { resetAttemptsMade: true, resetAttemptsStarted: true });
+    expect(retryB).not.toHaveBeenCalled();
+    expect(queueInstances[0].getJobs).toHaveBeenCalledWith(['failed'], 0, 99);
+  });
+
+  it('manually retries a retained failed job by its existing ID', async () => {
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
+    manager.initialize();
+    const retry = vi.fn();
+    queueInstances[0].getJob.mockResolvedValue({
+      id: 'job-1',
+      getState: vi.fn(() => Promise.resolve('failed')),
+      retry,
+    });
+
+    await expect(manager.retryDeadLetter('job-1')).resolves.toBe(true);
+    expect(retry).toHaveBeenCalledWith('failed', { resetAttemptsMade: true, resetAttemptsStarted: true });
   });
 
   it('returns queue size 0 when queue is not initialized', async () => {
     const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
     await expect(manager.getQueueSize()).resolves.toBe(0);
+  });
+
+  it('does not retry a job that is no longer failed', async () => {
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
+    manager.initialize();
+    queueInstances[0].getJob.mockResolvedValue({
+      getState: vi.fn(() => Promise.resolve('completed')),
+      retry: vi.fn(),
+    });
+
+    await expect(manager.retryDeadLetter('job-1')).resolves.toBe(false);
   });
 
   it('starts worker once and wires error handler', () => {
@@ -184,12 +234,11 @@ describe('QueueManager', () => {
 
     expect(workerInstances[0].close).toHaveBeenCalledTimes(1);
     expect(queueInstances[0].close).toHaveBeenCalledTimes(1);
-    expect(queueInstances[1].close).toHaveBeenCalledTimes(1);
+    expect(queueInstances).toHaveLength(1);
     expect(redisInstances[0].quit).toHaveBeenCalledTimes(1);
     expect(redisInstances[0].workerConn.quit).toHaveBeenCalledTimes(1);
     expect(manager.worker).toBe(null);
     expect(manager.queue).toBe(null);
-    expect(manager.dlq).toBe(null);
     expect(manager.connection).toBe(null);
     expect(manager.workerConnection).toBe(null);
   });

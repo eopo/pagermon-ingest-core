@@ -208,6 +208,23 @@ Rules:
 - each incoming message is enqueued once per configured target
 - delivery is queued per target, so retries/failures are isolated per API target
 
+### Failed Deliveries, Retries, and Replay
+
+The queue makes up to 10 delivery attempts with exponential backoff starting at 2 seconds. Jobs that still fail, as well as non-retryable failures, remain in the `failed` state of the main `sdr-messages` queue. Failed jobs are not automatically removed; `QueueManager.getDeadLetters(limit)` reads this same durable failed-job store. There is no separate `-dlq` transfer, avoiding a delete-and-copy window that could lose a message.
+
+On startup and after each successful health check, the service replays a bounded batch of up to 100 failed jobs for that specific API target. The same BullMQ job and ID are moved back to processing with a fresh attempt budget; target filtering keeps one unavailable API from blocking healthy targets. Existing failed jobs without recovery metadata are considered retryable. Jobs marked non-retryable (for example, authentication/client errors or an explicitly unknown target ID) remain available for inspection but are not automatically replayed.
+
+`INGEST_CORE__ENABLE_DLQ` defaults to `true` and enables automatic failed-job replay. When set to `false`, failed jobs are still retained in the main queue and visible through `getDeadLetters()`, but automatic replay is disabled. After correcting an authentication or configuration problem, an operator can deliberately retry a retained job through the `QueueManager` API:
+
+```js
+const failed = await queueManager.getDeadLetters(100);
+await queueManager.retryDeadLetter(failed[0].id);
+```
+
+`retryDeadLetter` reuses the existing job ID and only retries jobs still in the failed state. Correct the underlying API configuration or payload issue before manually retrying permanent failures. Failed jobs are retained without automatic expiry; monitor Redis storage and define an operational retention/cleanup policy appropriate to the deployment.
+
+Delivery is **at least once**, not exactly once. If PagerMon accepts a request but the response is lost, the job may be retried and create a duplicate. Configure Redis persistence (AOF/RDB as appropriate) and `maxmemory-policy noeviction`; messages are not protected if Redis loses data, evicts queue data, or fails before a successful enqueue is acknowledged.
+
 ## Metrics & Observability
 
 Ingest supports optional Prometheus metrics collection for monitoring and observability.

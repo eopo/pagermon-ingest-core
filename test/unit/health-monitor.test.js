@@ -26,6 +26,7 @@ describe('HealthMonitor', () => {
     await monitor.perform();
     expect(monitor.isHealthy).toBe(true);
     expect(monitor.failureCount).toBe(1);
+    expect(onCheck).toHaveBeenLastCalledWith(expect.objectContaining({ healthy: true, checkSucceeded: false }));
     expect(healthGauge.labels).toHaveBeenLastCalledWith({ target_name: 'default' });
     expect(healthGauge.set).toHaveBeenLastCalledWith(1);
     expect(failureCounter.labels).toHaveBeenLastCalledWith({ target_name: 'default' });
@@ -34,6 +35,7 @@ describe('HealthMonitor', () => {
     await monitor.perform();
     expect(monitor.isHealthy).toBe(false);
     expect(monitor.failureCount).toBe(2);
+    expect(onCheck).toHaveBeenLastCalledWith(expect.objectContaining({ healthy: false, checkSucceeded: false }));
     expect(healthGauge.labels).toHaveBeenLastCalledWith({ target_name: 'default' });
     expect(healthGauge.set).toHaveBeenLastCalledWith(0);
     expect(failureCounter.inc).toHaveBeenCalledTimes(2);
@@ -44,6 +46,8 @@ describe('HealthMonitor', () => {
   it('recovers to healthy state after successful check', async () => {
     const apiClient = { checkHealth: vi.fn() };
     const monitor = new HealthMonitor({ apiClient }, { unhealthyThreshold: 1, metrics: createMockMetrics() });
+    const onCheck = vi.fn();
+    monitor.on('check', onCheck);
 
     apiClient.checkHealth.mockResolvedValueOnce(false);
     await monitor.perform();
@@ -53,17 +57,21 @@ describe('HealthMonitor', () => {
     await monitor.perform();
     expect(monitor.isHealthy).toBe(true);
     expect(monitor.failureCount).toBe(0);
+    expect(onCheck).toHaveBeenLastCalledWith(expect.objectContaining({ healthy: true, checkSucceeded: true }));
   });
 
   it('handles check exceptions as failures', async () => {
     const apiClient = { checkHealth: vi.fn().mockRejectedValue(new Error('boom')) };
     const metrics = createMockMetrics();
     const monitor = new HealthMonitor({ apiClient }, { unhealthyThreshold: 1, metrics });
+    const onCheck = vi.fn();
+    monitor.on('check', onCheck);
     const failureCounter = metrics.counter.mock.results[0].value;
 
     await monitor.perform();
     expect(monitor.isHealthy).toBe(false);
     expect(monitor.failureCount).toBe(1);
+    expect(onCheck).toHaveBeenCalledWith(expect.objectContaining({ checkSucceeded: false }));
     expect(failureCounter.labels).toHaveBeenLastCalledWith({ target_name: 'default' });
     expect(failureCounter.inc).toHaveBeenCalledTimes(1);
   });

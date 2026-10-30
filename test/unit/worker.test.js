@@ -97,7 +97,13 @@ describe('Worker', () => {
     const worker = new Worker({ queue, apiClients, healthByTarget, targetNamesById, metrics });
     const result = await worker._processMessage({
       id: '1',
-      data: { address: '123', targetId: 'target-b', source: 'x', timestamp: 1 },
+      data: {
+        address: '123',
+        targetId: 'target-b',
+        source: 'x',
+        timestamp: 1,
+        __ingestCoreFailure: { retryable: true, reason: 'previous attempt failed' },
+      },
     });
 
     expect(result).toEqual({ ok: true });
@@ -110,7 +116,7 @@ describe('Worker', () => {
     });
   });
 
-  it('returns without throwing for non-retryable 4xx and emits failed callback', async () => {
+  it('retains non-retryable 4xx failures instead of completing the job', async () => {
     const { queue, apiClients, healthByTarget, targetNamesById, metrics } = createWorkerDeps();
     const clientError = new Error('404 not found');
     clientError.name = 'ApiError';
@@ -124,14 +130,23 @@ describe('Worker', () => {
     const cb = vi.fn();
     worker.on('messageFailed', cb);
 
-    const result = await worker._processMessage({ id: '1', data: { address: '123', targetId: 'target-a' } });
-    expect(result).toBeUndefined();
+    const job = {
+      id: '1',
+      data: { address: '123', targetId: 'target-a' },
+      updateData: vi.fn(),
+    };
+    await expect(worker._processMessage(job)).rejects.toMatchObject({ name: 'UnrecoverableError' });
     expect(cb).toHaveBeenCalledTimes(1);
     expect(cb).toHaveBeenCalledWith(expect.objectContaining({ retryable: false, statusCode: 404 }));
     expect(failedCounter.labels).toHaveBeenCalledWith({ reason: 'http_404', target_name: 'pm-prod-a' });
     expect(failedCounter.inc).toHaveBeenCalledTimes(1);
     expect(durationHistogram.labels).toHaveBeenCalledWith({ status: 'failure', target_name: 'pm-prod-a' });
     expect(durationHistogram.observe).toHaveBeenCalledTimes(1);
+    expect(job.updateData).toHaveBeenCalledWith({
+      address: '123',
+      targetId: 'target-a',
+      __ingestCoreFailure: { retryable: false, reason: '404 not found', statusCode: 404 },
+    });
   });
 
   it('stops and closes queue', async () => {
@@ -144,7 +159,7 @@ describe('Worker', () => {
     expect(closeFn).toHaveBeenCalledTimes(1);
   });
 
-  it('returns without throwing for authentication failures (non-retryable)', async () => {
+  it('retains authentication failures as unrecoverable failed jobs', async () => {
     const { queue, apiClients, healthByTarget, targetNamesById, metrics } = createWorkerDeps();
     const authError = new Error('401 Unauthorized');
     authError.name = 'ApiError';
@@ -156,8 +171,13 @@ describe('Worker', () => {
     const cb = vi.fn();
     worker.on('messageFailed', cb);
 
-    const result = await worker._processMessage({ id: '1', data: { address: '123', targetId: 'target-a' } });
-    expect(result).toBeUndefined();
+    await expect(
+      worker._processMessage({
+        id: '1',
+        data: { address: '123', targetId: 'target-a' },
+        updateData: vi.fn(),
+      })
+    ).rejects.toMatchObject({ name: 'UnrecoverableError' });
     expect(cb).toHaveBeenCalledWith(expect.objectContaining({ retryable: false, statusCode: 401 }));
   });
 
@@ -173,10 +193,18 @@ describe('Worker', () => {
     const cb = vi.fn();
     worker.on('messageFailed', cb);
 
-    await expect(worker._processMessage({ id: '1', data: { address: '123', targetId: 'target-a' } })).rejects.toThrow(
-      '500 Internal Server Error'
-    );
+    const job = {
+      id: '1',
+      data: { address: '123', targetId: 'target-a' },
+      updateData: vi.fn(),
+    };
+    await expect(worker._processMessage(job)).rejects.toThrow('500 Internal Server Error');
     expect(cb).toHaveBeenCalledWith(expect.objectContaining({ retryable: true, statusCode: 500 }));
+    expect(job.updateData).toHaveBeenCalledWith({
+      address: '123',
+      targetId: 'target-a',
+      __ingestCoreFailure: { retryable: true, reason: '500 Internal Server Error', statusCode: 500 },
+    });
   });
 
   it('retries only unhealthy target jobs based on target-specific health state', async () => {
@@ -216,12 +244,13 @@ describe('Worker', () => {
     const cb = vi.fn();
     worker.on('messageFailed', cb);
 
-    const result = await worker._processMessage({
+    const job = {
       id: 'bad-target-job',
       data: { address: '999', targetId: 'does-not-exist' },
-    });
+      updateData: vi.fn(),
+    };
 
-    expect(result).toBeUndefined(); // worker catches non-retryable errors
+    await expect(worker._processMessage(job)).rejects.toMatchObject({ name: 'UnrecoverableError' });
     expect(cb).toHaveBeenCalledWith(
       expect.objectContaining({ error: 'No ApiClient configured for targetId=does-not-exist' })
     );
