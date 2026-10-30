@@ -123,4 +123,29 @@ describeWithRedis('BullMQ failed-job recovery', () => {
     expect(await (await recovered.queue.getJob('target-b-1')).getState()).toBe('failed');
     expect(await (await recovered.queue.getJob('permanent-a')).getState()).toBe('failed');
   }, 20000);
+
+  it('queues bulk replay without waiting for the job to run', async () => {
+    queueName = `queue-replay-command-${Date.now()}`;
+    const first = new QueueManager({ redisUrl }, { queueName, metrics: createMockMetrics() });
+    managers.push(first);
+    await first.initialize();
+    const job = await first.queue.add(
+      'message',
+      { address: 'bulk-retry', targetId: 'target-a' },
+      { jobId: 'bulk-retry', attempts: 1, removeOnComplete: false }
+    );
+    first.startProcessing(() => {
+      throw new Error('recover me');
+    });
+    await waitForState(first.queue, job.id, 'failed');
+
+    await first.close();
+    managers = [];
+    const queue = new QueueManager({ redisUrl }, { queueName, metrics: createMockMetrics() });
+    managers.push(queue);
+    await queue.initialize();
+
+    await expect(queue.retryFailedJobs()).resolves.toBe(1);
+    await expect((await queue.queue.getJob(job.id)).getState()).resolves.toBe('waiting');
+  }, 20000);
 });

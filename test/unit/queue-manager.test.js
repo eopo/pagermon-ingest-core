@@ -79,7 +79,10 @@ describe('QueueManager', () => {
   });
 
   it('initializes the queue with durable failed-job retention', () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
+    const manager = new QueueManager(
+      { redisUrl: 'redis://localhost:6379' },
+      { metrics: createMockMetrics(), recoveryBatchSize: 2 }
+    );
     manager.initialize();
 
     expect(redisInstances).toHaveLength(1);
@@ -209,6 +212,59 @@ describe('QueueManager', () => {
     });
 
     await expect(manager.retryDeadLetter('job-1')).resolves.toBe(false);
+  });
+
+  it('requeues all retained failures without waiting for processing', async () => {
+    const manager = new QueueManager(
+      { redisUrl: 'redis://localhost:6379' },
+      { metrics: createMockMetrics(), recoveryBatchSize: 2 }
+    );
+    manager.initialize();
+    const retryJobs = ['first', 'second', 'third'].map((id) => ({
+      id,
+      getState: vi.fn(() => Promise.resolve('failed')),
+      retry: vi.fn(() => Promise.resolve()),
+    }));
+    queueInstances[0].getJobs
+      .mockResolvedValueOnce(retryJobs.slice(0, 2))
+      .mockResolvedValueOnce(retryJobs.slice(2))
+      .mockResolvedValueOnce([]);
+    queueInstances[0].getJob.mockImplementation((id) => Promise.resolve(retryJobs.find((job) => job.id === id)));
+
+    await expect(manager.retryFailedJobs()).resolves.toBe(3);
+    expect(queueInstances[0].getJobs).toHaveBeenNthCalledWith(1, ['failed'], 0, 1);
+    expect(queueInstances[0].getJobs).toHaveBeenNthCalledWith(2, ['failed'], 2, 3);
+    expect(retryJobs.every((job) => job.retry.mock.calls.length === 1)).toBe(true);
+  });
+
+  it('requeues only failures matching error text, including permanent failures', async () => {
+    const manager = new QueueManager(
+      { redisUrl: 'redis://localhost:6379' },
+      { metrics: createMockMetrics(), recoveryBatchSize: 2 }
+    );
+    manager.initialize();
+    const unauthorizedJob = {
+      id: 'auth',
+      failedReason: 'UnrecoverableError: unauthorized credentials',
+      data: { __ingestCoreFailure: { retryable: false, reason: '401 Unauthorized' } },
+      getState: vi.fn(() => Promise.resolve('failed')),
+      retry: vi.fn(() => Promise.resolve()),
+    };
+    const badPayloadJob = {
+      id: 'payload',
+      failedReason: 'UnrecoverableError: invalid payload',
+      data: { __ingestCoreFailure: { retryable: false, reason: 'invalid payload' } },
+      getState: vi.fn(() => Promise.resolve('failed')),
+      retry: vi.fn(() => Promise.resolve()),
+    };
+    queueInstances[0].getJobs.mockResolvedValueOnce([unauthorizedJob, badPayloadJob]).mockResolvedValueOnce([]);
+    queueInstances[0].getJob.mockImplementation((id) =>
+      Promise.resolve(id === 'auth' ? unauthorizedJob : badPayloadJob)
+    );
+
+    await expect(manager.retryFailedJobs({ reason: '401 unauthorized' })).resolves.toBe(1);
+    expect(unauthorizedJob.retry).toHaveBeenCalledTimes(1);
+    expect(badPayloadJob.retry).not.toHaveBeenCalled();
   });
 
   it('starts worker once and wires error handler', () => {

@@ -10,6 +10,12 @@ function parseArgs(args) {
       options.jobId = args[index + 1];
       if (!options.jobId) throw new Error('--job-id requires a job ID');
       index++;
+    } else if (arg === '--all') {
+      options.all = true;
+    } else if (arg === '--reason') {
+      options.reason = args[index + 1];
+      if (!options.reason) throw new Error('--reason requires a search string');
+      index++;
     } else if (arg === '--limit') {
       options.limit = Number(args[index + 1]);
       index++;
@@ -26,6 +32,12 @@ function parseArgs(args) {
   if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > 500) {
     throw new Error('--limit must be an integer between 1 and 500');
   }
+  if (options.jobId && (options.all || options.reason)) {
+    throw new Error('--job-id cannot be combined with --all or --reason');
+  }
+  if (options.all && options.reason) {
+    throw new Error('--all cannot be combined with --reason');
+  }
   return options;
 }
 
@@ -40,8 +52,9 @@ async function main() {
   }
 
   if (options.help) {
-    console.log('Usage: npm run replay-failed [-- --limit N] [--job-id ID]');
-    console.log('List retained failed jobs, or retry one by its exact BullMQ job ID.');
+    console.log('Usage: npm run replay-failed [--limit N] [--job-id ID | --all | --reason TEXT]');
+    console.log('List retained failed jobs or asynchronously queue selected jobs for retry.');
+    console.log('--all retries every retained failed job; --reason matches error-reason text.');
     return;
   }
 
@@ -58,6 +71,12 @@ async function main() {
         return;
       }
       console.log(`Queued failed job for retry: ${options.jobId}`);
+      return;
+    }
+
+    if (options.all || options.reason) {
+      const retried = await queue.retryFailedJobs({ reason: options.reason });
+      console.log(`Queued ${retried} failed job(s) for retry${options.reason ? ` matching "${options.reason}"` : ''}.`);
       return;
     }
 

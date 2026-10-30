@@ -226,9 +226,11 @@ Operators can inspect retained failures and explicitly retry a selected job from
 ```bash
 npm run replay-failed -- --limit 100
 npm run replay-failed -- --job-id msg-target-a-source-address-timestamp
+npm run replay-failed -- --all
+npm run replay-failed -- --reason "401 Unauthorized"
 ```
 
-`retryDeadLetter` and the CLI reuse the existing job ID and only retry jobs still in the failed state. Correct the underlying API configuration or payload issue before manually retrying permanent failures. Failed jobs are retained without automatic expiry; monitor Redis storage and define an operational retention/cleanup policy appropriate to the deployment.
+`--all` retries every retained failed job; `--reason` selects jobs whose stored BullMQ failure reason or recorded error text contains the given case-insensitive substring. Either option may retry permanent errors, including invalid payloads, so inspect the affected failures and correct their cause first. The command scans failed jobs in pages, marks matching jobs for retry using their existing IDs, and returns after that handoff—it does not wait for delivery to finish. `retryDeadLetter` and the CLI only retry jobs still in the failed state. Failed jobs are retained without automatic expiry; monitor Redis storage and define an operational retention/cleanup policy appropriate to the deployment.
 
 Delivery is **at least once**, not exactly once. If PagerMon accepts a request but the response is lost, the job may be retried and create a duplicate. Configure Redis persistence (AOF/RDB as appropriate) and `maxmemory-policy noeviction`; messages are not protected if Redis loses data, evicts queue data, or fails before a successful enqueue is acknowledged.
 
