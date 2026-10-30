@@ -5,11 +5,41 @@ const queueInstances = [];
 const workerInstances = [];
 const redisInstances = [];
 
+function configureFailedSet(queue, entries) {
+  const failed = new Map(entries.map(({ id, score }) => [id, score]));
+  const redis = queue.options.connection;
+  const sortedEntries = () =>
+    [...failed.entries()]
+      .map(([id, score]) => ({ id, score }))
+      .sort((left, right) => left.score - right.score || Buffer.compare(Buffer.from(left.id), Buffer.from(right.id)));
+  const withScores = (jobs) => jobs.flatMap(({ id, score }) => [id, String(score)]);
+
+  redis.zrange.mockImplementation((_key, start, end) => withScores(sortedEntries().slice(start, end + 1)));
+  redis.zrangebyscore.mockImplementation((_key, min, max, ...options) => {
+    const minExclusive = min.startsWith('(');
+    const minScore = Number(minExclusive ? min.slice(1) : min);
+    const maxScore = max === '+inf' ? Infinity : Number(max);
+    let jobs = sortedEntries().filter(
+      ({ score }) => (minExclusive ? score > minScore : score >= minScore) && score <= maxScore
+    );
+    const limitIndex = options.indexOf('LIMIT');
+    if (limitIndex !== -1) {
+      const offset = Number(options[limitIndex + 1]);
+      const count = Number(options[limitIndex + 2]);
+      jobs = jobs.slice(offset, offset + count);
+    }
+    return withScores(jobs);
+  });
+
+  return failed;
+}
+
 vi.mock('bullmq', () => {
   class QueueMock {
     constructor(name, options) {
       this.name = name;
       this.options = options;
+      this.toKey = vi.fn((type) => `bull:${name}:${type}`);
       this.add = vi.fn((_type, payload) => Promise.resolve({ id: 'job-1', data: payload }));
       this.getJobs = vi.fn(() => Promise.resolve([]));
       this.getJob = vi.fn(() => Promise.resolve(null));
@@ -46,6 +76,8 @@ vi.mock('ioredis', () => {
         this.url = url;
         this.options = options;
         this.quit = vi.fn(() => Promise.resolve());
+        this.zrange = vi.fn(() => Promise.resolve([]));
+        this.zrangebyscore = vi.fn(() => Promise.resolve([]));
         this.workerConn = {
           quit: vi.fn(() => Promise.resolve()),
         };
@@ -181,17 +213,20 @@ describe('QueueManager', () => {
         retry: vi.fn(),
       },
     ];
-    queueInstances[0].getJobs.mockResolvedValue(recoveryJobs);
+    configureFailedSet(
+      queueInstances[0],
+      recoveryJobs.map((job, index) => ({ id: job.id, score: index + 1 }))
+    );
     queueInstances[0].getJob.mockImplementation((id) => Promise.resolve(recoveryJobs.find((job) => job.id === id)));
 
     await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(2);
     expect(retryA).toHaveBeenCalledWith('failed', { resetAttemptsMade: true, resetAttemptsStarted: true });
     expect(retryAuth).toHaveBeenCalledWith('failed', { resetAttemptsMade: true, resetAttemptsStarted: true });
     expect(retryB).not.toHaveBeenCalled();
-    expect(queueInstances[0].getJobs).toHaveBeenCalledWith(['failed'], 0, -1);
+    expect(redisInstances[0].zrange).toHaveBeenCalledWith('bull:sdr-messages:failed', 0, 99, 'WITHSCORES');
   });
 
-  it('finds target failures beyond unrelated failures in the failed-job snapshot', async () => {
+  it('reads bounded oldest-first pages and advances past unrelated target failures', async () => {
     const manager = new QueueManager(
       { redisUrl: 'redis://localhost:6379' },
       { metrics: createMockMetrics(), recoveryBatchSize: 1 }
@@ -203,17 +238,86 @@ describe('QueueManager', () => {
       getState: vi.fn(() => Promise.resolve('failed')),
       retry: vi.fn(() => Promise.resolve()),
     };
-    queueInstances[0].getJobs.mockResolvedValue([
-      ...Array.from({ length: 100 }, (_, index) => ({
-        id: `other-${index}`,
-        data: { targetId: 'target-b' },
-      })),
-      targetJob,
+    const unrelatedJob = {
+      id: 'other',
+      data: { targetId: 'target-b' },
+      getState: vi.fn(() => Promise.resolve('failed')),
+    };
+    configureFailedSet(queueInstances[0], [
+      { id: unrelatedJob.id, score: 1 },
+      { id: targetJob.id, score: 2 },
     ]);
-    queueInstances[0].getJob.mockResolvedValue(targetJob);
+    queueInstances[0].getJob.mockImplementation((id) => Promise.resolve(id === 'other' ? unrelatedJob : targetJob));
+
+    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(0);
+    expect(queueInstances[0].getJob).toHaveBeenCalledTimes(1);
+    expect(targetJob.retry).not.toHaveBeenCalled();
 
     await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(1);
+
     expect(targetJob.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not let a job that fails again jump ahead of older failures', async () => {
+    const manager = new QueueManager(
+      { redisUrl: 'redis://localhost:6379' },
+      { metrics: createMockMetrics(), recoveryBatchSize: 1 }
+    );
+    manager.initialize();
+    const failed = configureFailedSet(queueInstances[0], [
+      { id: 'first', score: 1 },
+      { id: 'second', score: 2 },
+    ]);
+    let firstState = 'failed';
+    const firstJob = {
+      id: 'first',
+      data: { targetId: 'target-a' },
+      getState: vi.fn(() => Promise.resolve(firstState)),
+      retry: vi.fn(() => {
+        firstState = 'waiting';
+        failed.delete('first');
+        return Promise.resolve();
+      }),
+    };
+    const secondJob = {
+      id: 'second',
+      data: { targetId: 'target-a' },
+      getState: vi.fn(() => Promise.resolve('failed')),
+      retry: vi.fn(() => Promise.resolve()),
+    };
+    queueInstances[0].getJob.mockImplementation((id) => Promise.resolve(id === 'first' ? firstJob : secondJob));
+
+    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(1);
+    failed.set('first', 3);
+    firstState = 'failed';
+
+    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(1);
+    expect(firstJob.retry).toHaveBeenCalledTimes(1);
+    expect(secondJob.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues through failed jobs with identical Redis scores', async () => {
+    const manager = new QueueManager(
+      { redisUrl: 'redis://localhost:6379' },
+      { metrics: createMockMetrics(), recoveryBatchSize: 1 }
+    );
+    manager.initialize();
+    const jobs = ['a', 'b'].map((id) => ({
+      id,
+      data: { targetId: 'target-a' },
+      getState: vi.fn(() => Promise.resolve('failed')),
+      retry: vi.fn(() => Promise.resolve()),
+    }));
+    configureFailedSet(
+      queueInstances[0],
+      jobs.map(({ id }) => ({ id, score: 1 }))
+    );
+    queueInstances[0].getJob.mockImplementation((id) => Promise.resolve(jobs.find((job) => job.id === id)));
+
+    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(1);
+    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(1);
+
+    expect(jobs.map((job) => job.retry.mock.calls.length)).toEqual([1, 1]);
   });
 
   it('manually retries a retained failed job by its existing ID', async () => {
@@ -255,7 +359,7 @@ describe('QueueManager', () => {
       getState: vi.fn(() => Promise.resolve('failed')),
       retry: vi.fn(() => Promise.reject(retryError)),
     };
-    queueInstances[0].getJobs.mockResolvedValue([job]);
+    configureFailedSet(queueInstances[0], [{ id: 'job-1', score: 1 }]);
     queueInstances[0].getJob.mockResolvedValue(job);
 
     await expect(manager.recoverFailedJobs('target-a')).rejects.toBe(retryError);
