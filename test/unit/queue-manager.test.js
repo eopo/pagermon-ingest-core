@@ -142,6 +142,9 @@ describe('QueueManager', () => {
     expect(queueInstances[0].getJobs).not.toHaveBeenCalled();
     expect(jobs).toEqual([]);
 
+    await expect(manager.getDeadLetters(0.5)).resolves.toEqual([]);
+    expect(queueInstances[0].getJobs).not.toHaveBeenCalled();
+
     const deadLetters = await manager.getDeadLetters(10);
     expect(queueInstances[0].getJobs).toHaveBeenCalledWith(['failed'], 0, 9);
     expect(deadLetters).toEqual([
@@ -162,26 +165,55 @@ describe('QueueManager', () => {
     const retryA = vi.fn();
     const retryAuth = vi.fn();
     const retryB = vi.fn();
-    queueInstances[0].getJobs.mockResolvedValue([
-      { id: 'a', data: { targetId: 'target-a' }, retry: retryA },
-      { id: 'b', data: { targetId: 'target-b' }, retry: retryB },
+    const recoveryJobs = [
+      { id: 'a', data: { targetId: 'target-a' }, getState: vi.fn(() => Promise.resolve('failed')), retry: retryA },
+      { id: 'b', data: { targetId: 'target-b' }, getState: vi.fn(() => Promise.resolve('failed')), retry: retryB },
       {
         id: 'auth',
         data: { targetId: 'target-a', __ingestCoreFailure: { retryable: false, statusCode: 401 } },
+        getState: vi.fn(() => Promise.resolve('failed')),
         retry: retryAuth,
       },
       {
         id: 'c',
         data: { targetId: 'target-a', __ingestCoreFailure: { retryable: false, statusCode: 400 } },
+        getState: vi.fn(() => Promise.resolve('failed')),
         retry: vi.fn(),
       },
-    ]);
+    ];
+    queueInstances[0].getJobs.mockResolvedValue(recoveryJobs);
+    queueInstances[0].getJob.mockImplementation((id) => Promise.resolve(recoveryJobs.find((job) => job.id === id)));
 
     await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(2);
     expect(retryA).toHaveBeenCalledWith('failed', { resetAttemptsMade: true, resetAttemptsStarted: true });
     expect(retryAuth).toHaveBeenCalledWith('failed', { resetAttemptsMade: true, resetAttemptsStarted: true });
     expect(retryB).not.toHaveBeenCalled();
-    expect(queueInstances[0].getJobs).toHaveBeenCalledWith(['failed'], 0, 99);
+    expect(queueInstances[0].getJobs).toHaveBeenCalledWith(['failed'], 0, -1);
+  });
+
+  it('finds target failures beyond unrelated failures in the failed-job snapshot', async () => {
+    const manager = new QueueManager(
+      { redisUrl: 'redis://localhost:6379' },
+      { metrics: createMockMetrics(), recoveryBatchSize: 1 }
+    );
+    manager.initialize();
+    const targetJob = {
+      id: 'target-job',
+      data: { targetId: 'target-a' },
+      getState: vi.fn(() => Promise.resolve('failed')),
+      retry: vi.fn(() => Promise.resolve()),
+    };
+    queueInstances[0].getJobs.mockResolvedValue([
+      ...Array.from({ length: 100 }, (_, index) => ({
+        id: `other-${index}`,
+        data: { targetId: 'target-b' },
+      })),
+      targetJob,
+    ]);
+    queueInstances[0].getJob.mockResolvedValue(targetJob);
+
+    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(1);
+    expect(targetJob.retry).toHaveBeenCalledTimes(1);
   });
 
   it('manually retries a retained failed job by its existing ID', async () => {
@@ -196,6 +228,54 @@ describe('QueueManager', () => {
 
     await expect(manager.retryDeadLetter('job-1')).resolves.toBe(true);
     expect(retry).toHaveBeenCalledWith('failed', { resetAttemptsMade: true, resetAttemptsStarted: true });
+  });
+
+  it('propagates bulk replay errors when a failed job remains failed', async () => {
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
+    manager.initialize();
+    const retryError = new Error('READONLY Redis is read only');
+    const job = {
+      id: 'job-1',
+      getState: vi.fn(() => Promise.resolve('failed')),
+      retry: vi.fn(() => Promise.reject(retryError)),
+    };
+    queueInstances[0].getJobs.mockResolvedValue([job]);
+    queueInstances[0].getJob.mockResolvedValue(job);
+
+    await expect(manager.retryFailedJobs()).rejects.toBe(retryError);
+  });
+
+  it('propagates automatic recovery errors when a failed job remains failed', async () => {
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
+    manager.initialize();
+    const retryError = new Error('NOPERM Redis write denied');
+    const job = {
+      id: 'job-1',
+      data: { targetId: 'target-a' },
+      getState: vi.fn(() => Promise.resolve('failed')),
+      retry: vi.fn(() => Promise.reject(retryError)),
+    };
+    queueInstances[0].getJobs.mockResolvedValue([job]);
+    queueInstances[0].getJob.mockResolvedValue(job);
+
+    await expect(manager.recoverFailedJobs('target-a')).rejects.toBe(retryError);
+  });
+
+  it('suppresses retry errors when another process has changed the job state', async () => {
+    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
+    manager.initialize();
+    queueInstances[0].getJob
+      .mockResolvedValueOnce({
+        id: 'job-1',
+        getState: vi.fn(() => Promise.resolve('failed')),
+        retry: vi.fn(() => Promise.reject(new Error('job changed state'))),
+      })
+      .mockResolvedValueOnce({
+        id: 'job-1',
+        getState: vi.fn(() => Promise.resolve('waiting')),
+      });
+
+    await expect(manager.retryDeadLetter('job-1')).resolves.toBe(false);
   });
 
   it('returns queue size 0 when queue is not initialized', async () => {
@@ -225,15 +305,12 @@ describe('QueueManager', () => {
       getState: vi.fn(() => Promise.resolve('failed')),
       retry: vi.fn(() => Promise.resolve()),
     }));
-    queueInstances[0].getJobs
-      .mockResolvedValueOnce(retryJobs.slice(0, 2))
-      .mockResolvedValueOnce(retryJobs.slice(2))
-      .mockResolvedValueOnce([]);
+    queueInstances[0].getJobs.mockResolvedValue(retryJobs);
     queueInstances[0].getJob.mockImplementation((id) => Promise.resolve(retryJobs.find((job) => job.id === id)));
 
     await expect(manager.retryFailedJobs()).resolves.toBe(3);
-    expect(queueInstances[0].getJobs).toHaveBeenNthCalledWith(1, ['failed'], 0, 1);
-    expect(queueInstances[0].getJobs).toHaveBeenNthCalledWith(2, ['failed'], 2, 3);
+    expect(queueInstances[0].getJobs).toHaveBeenCalledTimes(1);
+    expect(queueInstances[0].getJobs).toHaveBeenCalledWith(['failed'], 0, -1);
     expect(retryJobs.every((job) => job.retry.mock.calls.length === 1)).toBe(true);
   });
 
@@ -257,7 +334,7 @@ describe('QueueManager', () => {
       getState: vi.fn(() => Promise.resolve('failed')),
       retry: vi.fn(() => Promise.resolve()),
     };
-    queueInstances[0].getJobs.mockResolvedValueOnce([unauthorizedJob, badPayloadJob]).mockResolvedValueOnce([]);
+    queueInstances[0].getJobs.mockResolvedValue([unauthorizedJob, badPayloadJob]);
     queueInstances[0].getJob.mockImplementation((id) =>
       Promise.resolve(id === 'auth' ? unauthorizedJob : badPayloadJob)
     );
