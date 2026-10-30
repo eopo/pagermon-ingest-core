@@ -117,9 +117,7 @@ describeWithRedis('BullMQ failed-job recovery', () => {
     });
 
     await Promise.all(
-      ['target-a-1', 'target-a-2', 'target-a-3', 'auth-a'].map((id) =>
-        waitForState(recovered.queue, id, 'completed')
-      )
+      ['target-a-1', 'target-a-2', 'target-a-3', 'auth-a'].map((id) => waitForState(recovered.queue, id, 'completed'))
     );
     expect(delivered.sort()).toEqual(['auth-a', 'target-a-1', 'target-a-2', 'target-a-3']);
     expect(await (await recovered.queue.getJob('target-b-1')).getState()).toBe('failed');
