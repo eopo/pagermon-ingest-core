@@ -53,7 +53,7 @@ describeWithRedis('BullMQ failed-job recovery', () => {
     managers.push(first);
     await first.initialize();
 
-    const jobIds = ['target-a-1', 'target-a-2', 'target-a-3', 'target-b-1', 'permanent-a'];
+    const jobIds = ['target-a-1', 'target-a-2', 'target-a-3', 'target-b-1', 'permanent-a', 'auth-a'];
     const jobs = await Promise.all(
       jobIds.map((id) =>
         first.queue.add(
@@ -62,8 +62,9 @@ describeWithRedis('BullMQ failed-job recovery', () => {
             address: id,
             targetId: id.startsWith('target-b') ? 'target-b' : 'target-a',
             __ingestCoreFailure: {
-              retryable: id !== 'permanent-a',
-              reason: id === 'permanent-a' ? '401 Unauthorized' : 'API unavailable',
+              retryable: !['permanent-a', 'auth-a'].includes(id),
+              reason: ['permanent-a', 'auth-a'].includes(id) ? 'Unauthorized' : 'API unavailable',
+              statusCode: id === 'auth-a' ? 401 : id === 'permanent-a' ? 400 : 500,
             },
           },
           { jobId: id, attempts: 1, removeOnComplete: false }
@@ -73,18 +74,23 @@ describeWithRedis('BullMQ failed-job recovery', () => {
 
     first.startProcessing((job) => {
       if (job.data.__ingestCoreFailure.retryable === false) {
-        throw new UnrecoverableError('401 Unauthorized');
+        throw new UnrecoverableError(job.data.__ingestCoreFailure.reason);
       }
       throw new Error('API unavailable');
     });
 
     await Promise.all(jobs.map((job) => waitForState(first.queue, job.id, 'failed')));
     const deadLetters = await first.getDeadLetters(10);
-    expect(deadLetters).toHaveLength(5);
+    expect(deadLetters).toHaveLength(6);
     expect(deadLetters.find(({ id }) => id === 'permanent-a')).toMatchObject({
       retryable: false,
-      failedReason: '401 Unauthorized',
+      failedReason: 'Unauthorized',
       data: { address: 'permanent-a', targetId: 'target-a' },
+    });
+    expect(deadLetters.find(({ id }) => id === 'auth-a')).toMatchObject({
+      retryable: false,
+      failedReason: 'Unauthorized',
+      data: { address: 'auth-a', targetId: 'target-a' },
     });
 
     await first.close();
@@ -101,8 +107,8 @@ describeWithRedis('BullMQ failed-job recovery', () => {
     managers.push(recovered, contender);
     await Promise.all([recovered.initialize(), contender.initialize()]);
 
-    const replayed = await recoverUntilComplete(recovered, contender, 3);
-    expect(replayed).toBe(3);
+    const replayed = await recoverUntilComplete(recovered, contender, 4);
+    expect(replayed).toBe(4);
 
     const delivered = [];
     recovered.startProcessing((job) => {
@@ -111,9 +117,11 @@ describeWithRedis('BullMQ failed-job recovery', () => {
     });
 
     await Promise.all(
-      ['target-a-1', 'target-a-2', 'target-a-3'].map((id) => waitForState(recovered.queue, id, 'completed'))
+      ['target-a-1', 'target-a-2', 'target-a-3', 'auth-a'].map((id) =>
+        waitForState(recovered.queue, id, 'completed')
+      )
     );
-    expect(delivered.sort()).toEqual(['target-a-1', 'target-a-2', 'target-a-3']);
+    expect(delivered.sort()).toEqual(['auth-a', 'target-a-1', 'target-a-2', 'target-a-3']);
     expect(await (await recovered.queue.getJob('target-b-1')).getState()).toBe('failed');
     expect(await (await recovered.queue.getJob('permanent-a')).getState()).toBe('failed');
   }, 20000);

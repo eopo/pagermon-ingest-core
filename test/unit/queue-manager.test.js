@@ -157,15 +157,26 @@ describe('QueueManager', () => {
     const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
     manager.initialize();
     const retryA = vi.fn();
+    const retryAuth = vi.fn();
     const retryB = vi.fn();
     queueInstances[0].getJobs.mockResolvedValue([
       { id: 'a', data: { targetId: 'target-a' }, retry: retryA },
       { id: 'b', data: { targetId: 'target-b' }, retry: retryB },
-      { id: 'c', data: { targetId: 'target-a', __ingestCoreFailure: { retryable: false } }, retry: vi.fn() },
+      {
+        id: 'auth',
+        data: { targetId: 'target-a', __ingestCoreFailure: { retryable: false, statusCode: 401 } },
+        retry: retryAuth,
+      },
+      {
+        id: 'c',
+        data: { targetId: 'target-a', __ingestCoreFailure: { retryable: false, statusCode: 400 } },
+        retry: vi.fn(),
+      },
     ]);
 
-    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(1);
+    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(2);
     expect(retryA).toHaveBeenCalledWith('failed', { resetAttemptsMade: true, resetAttemptsStarted: true });
+    expect(retryAuth).toHaveBeenCalledWith('failed', { resetAttemptsMade: true, resetAttemptsStarted: true });
     expect(retryB).not.toHaveBeenCalled();
     expect(queueInstances[0].getJobs).toHaveBeenCalledWith(['failed'], 0, 99);
   });

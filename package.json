@@ -10,6 +10,7 @@
   },
   "scripts": {
     "start": "node index.js",
+    "replay-failed": "node scripts/replay-failed.js",
     "test": "vitest run --coverage",
     "test:all": "vitest run",
     "test:unit": "vitest run test/unit",
