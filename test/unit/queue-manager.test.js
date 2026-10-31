@@ -350,19 +350,38 @@ describe('QueueManager', () => {
   });
 
   it('propagates automatic recovery errors when a failed job remains failed', async () => {
-    const manager = new QueueManager({ redisUrl: 'redis://localhost:6379' }, { metrics: createMockMetrics() });
+    const manager = new QueueManager(
+      { redisUrl: 'redis://localhost:6379' },
+      { metrics: createMockMetrics(), recoveryBatchSize: 1 }
+    );
     manager.initialize();
     const retryError = new Error('NOPERM Redis write denied');
-    const job = {
+    let retryAttempts = 0;
+    const firstJob = {
       id: 'job-1',
       data: { targetId: 'target-a' },
       getState: vi.fn(() => Promise.resolve('failed')),
-      retry: vi.fn(() => Promise.reject(retryError)),
+      retry: vi.fn(() => {
+        retryAttempts += 1;
+        return retryAttempts === 1 ? Promise.reject(retryError) : Promise.resolve();
+      }),
     };
-    configureFailedSet(queueInstances[0], [{ id: 'job-1', score: 1 }]);
-    queueInstances[0].getJob.mockResolvedValue(job);
+    const secondJob = {
+      id: 'job-2',
+      data: { targetId: 'target-a' },
+      getState: vi.fn(() => Promise.resolve('failed')),
+      retry: vi.fn(() => Promise.resolve()),
+    };
+    configureFailedSet(queueInstances[0], [
+      { id: firstJob.id, score: 1 },
+      { id: secondJob.id, score: 2 },
+    ]);
+    queueInstances[0].getJob.mockImplementation((id) => Promise.resolve(id === firstJob.id ? firstJob : secondJob));
 
     await expect(manager.recoverFailedJobs('target-a')).rejects.toBe(retryError);
+    await expect(manager.recoverFailedJobs('target-a')).resolves.toBe(1);
+    expect(firstJob.retry).toHaveBeenCalledTimes(2);
+    expect(secondJob.retry).not.toHaveBeenCalled();
   });
 
   it('suppresses retry errors when another process has changed the job state', async () => {
