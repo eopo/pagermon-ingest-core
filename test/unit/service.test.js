@@ -4,12 +4,17 @@ function buildServiceMocks({ queueInitReject = null, triggerOnError = false } = 
   const queue = {
     initialize: queueInitReject ? vi.fn(() => Promise.reject(queueInitReject)) : vi.fn(() => Promise.resolve()),
     addMessage: vi.fn(() => Promise.resolve()),
+    recoverFailedJobs: vi.fn(() => Promise.resolve(0)),
     close: vi.fn(() => Promise.resolve()),
   };
 
+  const healthCallbacks = [];
   const health = {
     start: vi.fn(),
     stop: vi.fn(),
+    on: vi.fn((event, callback) => {
+      if (event === 'check') healthCallbacks.push(callback);
+    }),
   };
 
   const worker = {
@@ -31,7 +36,7 @@ function buildServiceMocks({ queueInitReject = null, triggerOnError = false } = 
     }),
   };
 
-  return { queue, health, worker, orchestrator };
+  return { queue, health, healthCallbacks, worker, orchestrator };
 }
 
 async function loadRunService({ queueInitReject = null, triggerOnError = false, apiTargets } = {}) {
@@ -129,9 +134,11 @@ describe('runService', () => {
     const adapterFactory = vi.fn();
 
     await runService({ adapterFactory });
+    services.healthCallbacks[0]({ checkSucceeded: true });
 
     expect(services.queue.initialize).toHaveBeenCalledTimes(1);
     expect(services.worker.start).toHaveBeenCalledTimes(1);
+    expect(services.queue.recoverFailedJobs).toHaveBeenCalledWith('default');
     expect(services.queue.addMessage).toHaveBeenCalledTimes(1);
 
     const [queuedMessage] = services.queue.addMessage.mock.calls[0];
@@ -264,7 +271,9 @@ describe('runService', () => {
     });
 
     await runService();
+    services.healthCallbacks.forEach((callback) => callback({ checkSucceeded: true }));
 
+    expect(services.queue.recoverFailedJobs.mock.calls).toEqual([['primary'], ['backup']]);
     expect(services.queue.addMessage).toHaveBeenCalledTimes(2);
     const firstPayload = services.queue.addMessage.mock.calls[0][0];
     const secondPayload = services.queue.addMessage.mock.calls[1][0];

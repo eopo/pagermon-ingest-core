@@ -208,6 +208,32 @@ Rules:
 - each incoming message is enqueued once per configured target
 - delivery is queued per target, so retries/failures are isolated per API target
 
+### Failed Deliveries, Retries, and Replay
+
+The queue makes up to 10 delivery attempts with exponential backoff starting at 2 seconds. Jobs that still fail, as well as non-retryable failures, remain in the `failed` state of the main `sdr-messages` queue. Failed jobs are not automatically removed; `QueueManager.getDeadLetters(limit)` reads this same durable failed-job store. There is no separate `-dlq` transfer, avoiding a delete-and-copy window that could lose a message.
+
+On startup and after each successful health check, the service replays a bounded batch of up to 100 failed jobs for that specific API target. The same BullMQ job and ID are moved back to processing with a fresh attempt budget; target filtering keeps one unavailable API from blocking healthy targets. Existing failed jobs without recovery metadata are considered retryable. Authentication failures (HTTP 401/403) are also retried after that target's authenticated health check succeeds, allowing changed credentials to take effect. Other non-retryable errors (for example, invalid payloads or unknown target IDs) remain available for inspection but are not automatically replayed.
+
+`INGEST_CORE__ENABLE_DLQ` defaults to `true` and enables automatic failed-job replay. When set to `false`, failed jobs are still retained in the main queue and visible through `getDeadLetters()`, but automatic replay is disabled. After correcting an authentication or configuration problem, an operator can deliberately retry a retained job through the `QueueManager` API:
+
+```js
+const failed = await queueManager.getDeadLetters(100);
+await queueManager.retryDeadLetter(failed[0].id);
+```
+
+Operators can inspect retained failures and explicitly retry a selected job from the service environment:
+
+```bash
+npm run replay-failed -- --limit 100
+npm run replay-failed -- --job-id msg-target-a-source-address-timestamp
+npm run replay-failed -- --all
+npm run replay-failed -- --reason "401 Unauthorized"
+```
+
+`--all` retries every retained failed job; `--reason` selects jobs whose stored BullMQ failure reason or recorded error text contains the given case-insensitive substring. Either option may retry permanent errors, including invalid payloads, so inspect the affected failures and correct their cause first. The command scans failed jobs in pages, marks matching jobs for retry using their existing IDs, and returns after that handoff—it does not wait for delivery to finish. `retryDeadLetter` and the CLI only retry jobs still in the failed state. Failed jobs are retained without automatic expiry; monitor Redis storage and define an operational retention/cleanup policy appropriate to the deployment.
+
+Delivery is **at least once**, not exactly once. If PagerMon accepts a request but the response is lost, the job may be retried and create a duplicate. Configure Redis persistence (AOF/RDB as appropriate) and `maxmemory-policy noeviction`; messages are not protected if Redis loses data, evicts queue data, or fails before a successful enqueue is acknowledged.
+
 ## Metrics & Observability
 
 Ingest supports optional Prometheus metrics collection for monitoring and observability.
