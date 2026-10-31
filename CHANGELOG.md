@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.7.0](https://github.com/eopo/pagermon-ingest-core/compare/v1.6.4...v1.7.0) (2026-10-31)
+
+
+### Features
+
+* add CSV export for reports ([3f3a9a8](https://github.com/eopo/pagermon-ingest-core/commit/3f3a9a872c2fcf036d6c078571b53cf339b4112d))
+
+
+### Dependencies
+
+* **app:** bump the npm-runtime group across 1 directory with 2 updates ([#109](https://github.com/eopo/pagermon-ingest-core/issues/109)) ([34dac17](https://github.com/eopo/pagermon-ingest-core/commit/34dac17a9faca29199d707ee894d4971e844a3c3))
+* **app:** bump the npm-tooling group across 1 directory with 10 updates ([#111](https://github.com/eopo/pagermon-ingest-core/issues/111)) ([a4ecf25](https://github.com/eopo/pagermon-ingest-core/commit/a4ecf25a843e9da83be1c78adcf9782703287c9c))
+* **app:** bump vite from 8.3.2 to 8.3.5 ([#113](https://github.com/eopo/pagermon-ingest-core/issues/113)) ([9a6dd39](https://github.com/eopo/pagermon-ingest-core/commit/9a6dd39467262678eb9367b3dbc2c20d4e7fbc73))
+
 ## [1.6.4](https://github.com/eopo/pagermon-ingest-core/compare/v1.6.3...v1.6.4) (2026-10-02)
 
 
