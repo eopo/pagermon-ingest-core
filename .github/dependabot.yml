@@ -14,6 +14,8 @@ updates:
     open-pull-requests-limit: 10
     commit-message:
       prefix: 'deps(app)'
+      # Hidden changelog type, so tooling-only updates do not trigger a release.
+      prefix-development: 'chore(deps-dev)'
     labels:
       - 'dependencies'
       - 'dependabot'
