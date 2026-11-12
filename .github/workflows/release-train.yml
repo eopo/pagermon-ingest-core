@@ -1,0 +1,77 @@
+name: Release Train
+
+# Merges the pending release-please PR once it is due, bundling everything merged since the last
+# release. It is due when the weekly schedule (or a manual run) labelled it, or when its changelog
+# contains IMMEDIATE_PATTERN. Before merging, it waits until no other auto-merge PR is in flight, so
+# pending update PRs ship in the same release. Every CI completion re-evaluates the state.
+on:
+  schedule:
+    # Mondays, after the Dependabot run (03:00 UTC) and its auto-merges.
+    - cron: '0 6 * * 1'
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-train
+
+jobs:
+  release:
+    name: Merge due release PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      # A personal access token is required because merges performed via GITHUB_TOKEN do not
+      # trigger release-please on main.
+      GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      DUE_LABEL: 'release: due'
+      # Changelog text that makes a release due immediately; empty disables immediate releases.
+      IMMEDIATE_PATTERN: ''
+      MARK_DUE: ${{ github.event_name != 'workflow_run' }}
+    steps:
+      - name: Merge release PR when due
+        run: |
+          release=$(gh pr list --label 'autorelease: pending' --state open --limit 1 --json number,body,labels)
+          number=$(jq -r '.[0].number // empty' <<< "$release")
+          if [[ -z "$number" ]]; then
+            echo "No pending release PR"
+            exit 0
+          fi
+
+          if [[ "$MARK_DUE" == true ]]; then
+            gh pr edit "$number" --add-label "$DUE_LABEL"
+          elif ! jq -e --arg label "$DUE_LABEL" --arg pattern "$IMMEDIATE_PATTERN" \
+            '.[0] | any(.labels[]; .name == $label) or ($pattern != "" and (.body | contains($pattern)))' \
+            <<< "$release" > /dev/null; then
+            echo "Release PR #${number} is not due"
+            exit 0
+          fi
+
+          # Auto-merge PRs that are still running checks or about to merge. PRs with failed checks or
+          # blocked by other rules (e.g. unresolved review threads) are not waited for.
+          # shellcheck disable=SC2016 # $release is a jq variable, not a shell expansion
+          in_flight_filter='
+            [ .[]
+              | select(.number != $release and .autoMergeRequest != null)
+              | select(any(.statusCheckRollup[]; (.conclusion // .state) | IN("FAILURE", "ERROR", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED")) | not)
+              | select(
+                  (.statusCheckRollup | length) == 0
+                  or any(.statusCheckRollup[]; (.status // "COMPLETED") != "COMPLETED" or .state == "PENDING")
+                  or (.mergeStateStatus | IN("CLEAN", "UNSTABLE", "HAS_HOOKS", "UNKNOWN"))
+                )
+              | "#\(.number)"
+            ] | join(" ")'
+          in_flight=$(gh pr list --state open --json number,autoMergeRequest,mergeStateStatus,statusCheckRollup \
+            | jq -r --argjson release "$number" "$in_flight_filter")
+          if [[ -n "$in_flight" ]]; then
+            echo "Release PR #${number} is due; waiting for ${in_flight}"
+            exit 0
+          fi
+
+          echo "Merging release PR #${number}"
+          gh pr merge "$number" --auto --squash
