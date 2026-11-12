@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.2](https://github.com/eopo/pagermon-ingest-core/compare/v1.7.1...v1.7.2) (2026-11-12)
+
+
+### Dependencies
+
+* **app:** bump bullmq ([#122](https://github.com/eopo/pagermon-ingest-core/issues/122)) ([184c6af](https://github.com/eopo/pagermon-ingest-core/commit/184c6afd62ee7f70a6ab75157558d6334a366faf))
+
 ## [1.7.1](https://github.com/eopo/pagermon-ingest-core/compare/v1.7.0...v1.7.1) (2026-11-12)
 
 
