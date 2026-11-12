@@ -51,10 +51,20 @@ jobs:
           TARBALL: ${{ steps.pack.outputs.tarball }}
         run: npm publish "$TARBALL" --provenance --access public
 
+      # An App token is required: changes made with GITHUB_TOKEN do not trigger further workflows.
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: pagermon-ingest-adapter-multimon
+
       - name: Trigger adapter update
         uses: peter-evans/repository-dispatch@v4
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
           repository: eopo/pagermon-ingest-adapter-multimon
           event-type: core-updated
           client-payload: '{"core_version": "${{ github.event.release.tag_name }}"}'
