@@ -1,0 +1,44 @@
+name: Dependabot Auto-Merge
+
+# pull_request_target (unlike pull_request) exposes Actions secrets to Dependabot-triggered runs.
+# This is only safe because no step checks out or executes code from the pull request.
+on: pull_request_target
+
+permissions:
+  contents: read
+
+jobs:
+  auto-merge:
+    name: Enable auto-merge
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v3
+
+      # Policy (grouped PRs report their highest update type and most critical dependency type):
+      # - devDependencies and GitHub Actions: minor/patch. They are neither part of the published
+      #   package nor of the Docker image. Actions used only by release workflows are not exercised
+      #   by CI; minor/patch releases are trusted to stay compatible.
+      # - Other npm dependencies (runtime, transitive security fixes): patch only.
+      # - Majors, unknown update types and Docker base images stay manual; CI does not build the image.
+      - name: Enable auto-merge for low-risk updates
+        if: >-
+          (
+            steps.metadata.outputs.update-type == 'version-update:semver-patch' &&
+            contains(fromJSON('["npm_and_yarn", "github_actions"]'), steps.metadata.outputs.package-ecosystem)
+          ) || (
+            steps.metadata.outputs.update-type == 'version-update:semver-minor' &&
+            (
+              steps.metadata.outputs.package-ecosystem == 'github_actions' ||
+              steps.metadata.outputs.dependency-type == 'direct:development'
+            )
+          )
+        env:
+          # A personal access token is required because merges performed via GITHUB_TOKEN do not
+          # trigger push workflows on main (release-please).
+          GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"

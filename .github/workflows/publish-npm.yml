@@ -9,7 +9,7 @@ jobs:
     name: Publish to npm
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
@@ -26,8 +26,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Pack package
+        id: pack
+        env:
+          PACK_DIR: ${{ runner.temp }}/pack
+        run: |
+          mkdir -p "$PACK_DIR"
+          npm pack --pack-destination "$PACK_DIR"
+          echo "tarball=$(find "$PACK_DIR" -name '*.tgz' -print -quit)" >> "$GITHUB_OUTPUT"
+
+      # The adapter installs core from this release asset. Unlike a version on the npm registry,
+      # which becomes resolvable only minutes after `npm publish` returns, the asset is downloadable
+      # as soon as the upload completes.
+      - name: Attach package to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: gh release upload "$TAG" "$TARBALL" --repo "$GITHUB_REPOSITORY"
+
+      # Publishing the same tarball keeps the npm package byte-identical to the release asset.
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        env:
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: npm publish "$TARBALL" --provenance --access public
 
       - name: Trigger adapter update
         uses: peter-evans/repository-dispatch@v4

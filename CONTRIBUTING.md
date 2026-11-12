@@ -107,6 +107,22 @@ The core includes adapter loader contract checks in `test/unit/adapter-loader.te
 
 Adapter repositories should own hardware/integration decode tests.
 
+## Dependency Updates and Releases
+
+Dependabot opens grouped update PRs weekly. The commit type decides whether release-please cuts a release:
+
+- runtime dependencies (`deps(app)`) and Docker base images (`deps(docker)`) are user-facing and trigger a patch release
+- devDependencies (`chore(deps-dev)`) and GitHub Actions (`ci`) are hidden from the changelog and do not trigger a release
+
+`dependabot-automerge.yml` enables auto-merge (squash, after the required `CI Gate` check passes) for:
+
+- devDependency and GitHub Actions updates up to semver-minor
+- other npm updates (runtime and transitive security fixes) at semver-patch
+
+Majors and Docker base image updates always need a manual review.
+
+On release, `publish-npm.yml` packs the package once, attaches the tarball to the GitHub release, publishes the same tarball to npm, and dispatches `core-updated` to the multimon adapter. The adapter installs core from the release asset (npm resolves a new version only minutes after publishing), keeps a plain version in `package.json`, opens a `deps(core)` PR, and enables auto-merge on it.
+
 ## PR Quality Bar
 
 A good PR in this repo is:
