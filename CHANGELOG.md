@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.7.1](https://github.com/eopo/pagermon-ingest-core/compare/v1.7.0...v1.7.1) (2026-11-12)
+
+
+### Dependencies
+
+* **app:** bump bullmq from 6.5.0 to 6.5.3 in the npm-runtime group ([#117](https://github.com/eopo/pagermon-ingest-core/issues/117)) ([65cefb1](https://github.com/eopo/pagermon-ingest-core/commit/65cefb1da8edb9261cfcce9431b86c684a7fb709))
+* **app:** bump the npm-tooling group across 1 directory with 4 updates ([#119](https://github.com/eopo/pagermon-ingest-core/issues/119)) ([93a1e98](https://github.com/eopo/pagermon-ingest-core/commit/93a1e98231b9708cbf2e80d2e4daa1beb3e7acde))
+
 ## [1.7.0](https://github.com/eopo/pagermon-ingest-core/compare/v1.6.4...v1.7.0) (2026-10-31)
 
 
