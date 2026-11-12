@@ -1,12 +1,17 @@
 version: 2
+# Updates run before the weekly release train (release-train.yml), so they ship in the same release.
 updates:
   - package-ecosystem: 'npm'
     directory: '/'
     schedule:
       interval: 'weekly'
+      day: 'monday'
+      time: '03:00'
     groups:
+      # Runtime majors are raised as individual PRs for manual review, so they never block the group.
       npm-runtime:
         dependency-type: 'production'
+        update-types: ['minor', 'patch']
       npm-tooling:
         dependency-type: 'development'
         patterns:
@@ -24,6 +29,8 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+      day: 'monday'
+      time: '03:00'
     groups:
       docker-images:
         patterns:
@@ -39,10 +46,26 @@ updates:
     directory: '/'
     schedule:
       interval: 'weekly'
+      day: 'monday'
+      time: '03:00'
     groups:
-      github-actions:
+      # Actions that only run in release automation, so CI cannot exercise their updates.
+      # Their majors are raised as individual PRs for manual review.
+      actions-release:
+        patterns:
+          - 'googleapis/release-please-action'
+          - 'peter-evans/*'
+          - 'dependabot/fetch-metadata'
+        update-types: ['minor', 'patch']
+      # Actions exercised by CI, including the Docker actions of the release workflow. Must exclude
+      # the release actions explicitly, otherwise their majors would fall through to this group.
+      actions-ci:
         patterns:
           - '*'
+        exclude-patterns:
+          - 'googleapis/release-please-action'
+          - 'peter-evans/*'
+          - 'dependabot/fetch-metadata'
     open-pull-requests-limit: 5
     commit-message:
       prefix: 'ci'

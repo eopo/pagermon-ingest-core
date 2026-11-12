@@ -18,15 +18,23 @@ jobs:
         id: metadata
         uses: dependabot/fetch-metadata@v3
 
-      # Policy (grouped PRs report their highest update type):
-      # - npm and GitHub Actions minor/patch updates merge once the required CI checks pass. Merging
-      #   does not ship anything: a release still needs the manually merged release-please PR, where
-      #   runtime dependency changes are listed in the changelog.
-      # - Majors, unknown update types and Docker base images stay manual; CI does not build the image.
-      - name: Enable auto-merge for non-major updates
+      # Policy (grouped PRs report their highest update type and most critical dependency type):
+      # - npm and GitHub Actions minor/patch updates merge once the required CI checks pass.
+      # - Majors merge only where CI exercises everything they affect: devDependencies (format, lint,
+      #   tests, commitlint; never shipped) and the `actions-ci` group (run by CI, Docker build included).
+      # - Manual: runtime majors (unit tests mock parts of the delivery path), majors of release-only
+      #   actions (cannot run without side effects), Docker base images (Node.js/Debian majors on
+      #   rtl-sdr hardware are not testable in CI) and unknown update types.
+      - name: Enable auto-merge
         if: >-
-          contains(fromJSON('["version-update:semver-minor", "version-update:semver-patch"]'), steps.metadata.outputs.update-type) &&
-          contains(fromJSON('["npm_and_yarn", "github_actions"]'), steps.metadata.outputs.package-ecosystem)
+          contains(fromJSON('["npm_and_yarn", "github_actions"]'), steps.metadata.outputs.package-ecosystem) && (
+            contains(fromJSON('["version-update:semver-minor", "version-update:semver-patch"]'), steps.metadata.outputs.update-type) || (
+              steps.metadata.outputs.update-type == 'version-update:semver-major' && (
+                steps.metadata.outputs.dependency-type == 'direct:development' ||
+                steps.metadata.outputs.dependency-group == 'actions-ci'
+              )
+            )
+          )
         env:
           # A personal access token is required because merges performed via GITHUB_TOKEN do not
           # trigger push workflows on main (release-please).

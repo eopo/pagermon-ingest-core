@@ -109,14 +109,23 @@ Adapter repositories should own hardware/integration decode tests.
 
 ## Dependency Updates and Releases
 
-Dependabot opens grouped update PRs weekly. The commit type decides whether release-please cuts a release:
+Dependabot opens grouped update PRs every Monday at 03:00 UTC. The commit type decides whether release-please cuts a release:
 
 - runtime dependencies (`deps(app)`) and Docker base images (`deps(docker)`) are user-facing and trigger a patch release
 - devDependencies (`chore(deps-dev)`) and GitHub Actions (`ci`) are hidden from the changelog and do not trigger a release
 
-`dependabot-automerge.yml` enables auto-merge (squash, after the required `CI Gate` check passes) for semver-minor and semver-patch updates of npm packages and GitHub Actions. Runtime updates still reach users only through the manually merged release PR. Majors and Docker base image updates always need a manual review.
+CI builds and smoke-tests the Docker image natively on amd64 and arm64 with the same actions as the release workflow, runs the tests on the image's Node.js major, and lints the PR title (the squash commit message).
 
-On release, `publish-npm.yml` packs the package once, attaches the tarball to the GitHub release, publishes the same tarball to npm, and dispatches `core-updated` to the multimon adapter. The adapter installs core from the release asset (npm resolves a new version only minutes after publishing), keeps a plain version in `package.json`, opens a `deps(core)` PR, and enables auto-merge on it.
+`dependabot-automerge.yml` enables auto-merge (squash, after the required `CI Gate` check passes) for:
+
+- semver-minor and semver-patch updates of npm packages and GitHub Actions
+- majors of devDependencies and of the `actions-ci` group, because CI exercises everything they affect
+
+Runtime majors (raised as individual PRs), majors of release-only actions (`actions-release` group), and Docker base images need a manual review.
+
+`release-train.yml` merges the pending release PR every Monday at 06:00 UTC (or on a manual run), once no other auto-merge PR is in flight, so everything merged since the last release ships together.
+
+On release, `publish-npm.yml` packs the package once, attaches the tarball to the GitHub release, publishes the same tarball to npm, and dispatches `core-updated` to the multimon adapter. The adapter installs core from the release asset (npm resolves a new version only minutes after publishing), keeps a plain version in `package.json`, and opens a `deps(core)` PR with auto-merge. A core update makes the adapter's release train release immediately, bundled with any adapter update PRs still in flight.
 
 ## PR Quality Bar
 
