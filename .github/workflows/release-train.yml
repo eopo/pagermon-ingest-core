@@ -25,16 +25,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     env:
-      # A personal access token is required because merges performed via GITHUB_TOKEN do not
-      # trigger release-please on main.
-      GH_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
       GH_REPO: ${{ github.repository }}
       DUE_LABEL: 'release: due'
       # Changelog text that makes a release due immediately; empty disables immediate releases.
       IMMEDIATE_PATTERN: ''
       MARK_DUE: ${{ github.event_name != 'workflow_run' }}
     steps:
+      # An App token is required: changes made with GITHUB_TOKEN do not trigger further workflows.
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
       - name: Merge release PR when due
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           release=$(gh pr list --label 'autorelease: pending' --state open --limit 1 --json number,body,labels)
           number=$(jq -r '.[0].number // empty' <<< "$release")

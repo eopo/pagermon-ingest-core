@@ -125,6 +125,8 @@ Runtime majors (raised as individual PRs), majors of release-only actions (`acti
 
 `release-train.yml` merges the pending release PR every Monday at 06:00 UTC (or on a manual run), once no other auto-merge PR is in flight, so everything merged since the last release ships together.
 
+Automation that has to trigger further workflows (release-please, release train, auto-merge, the adapter update) authenticates as the GitHub App `pagermon-release-bot` via `actions/create-github-app-token`, using the repository variable `RELEASE_APP_CLIENT_ID` and the secret `RELEASE_APP_PRIVATE_KEY`. Changes made with `GITHUB_TOKEN` do not trigger workflows.
+
 On release, `publish-npm.yml` packs the package once, attaches the tarball to the GitHub release, publishes the same tarball to npm, and dispatches `core-updated` to the multimon adapter. The adapter installs core from the release asset (npm resolves a new version only minutes after publishing), keeps a plain version in `package.json`, and opens a `deps(core)` PR with auto-merge. A core update makes the adapter's release train release immediately, bundled with any adapter update PRs still in flight.
 
 ## PR Quality Bar
